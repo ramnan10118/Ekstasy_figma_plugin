@@ -1,4 +1,4 @@
-# Figma Grammar Checker Plugin
+# Figma Grammar Checker Plugin (Ekstasy)
 
 An AI-powered grammar and text checker plugin for Figma that helps you find and fix grammar, spelling, and style issues in your designs.
 
