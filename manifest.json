@@ -1,0 +1,21 @@
+{
+  "name": "Grammar Checker",
+  "id": "1234567890",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": [
+    "figma"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://api.openai.com/v1/chat/completions"
+    ],
+    "reasoning": "This plugin needs to connect to OpenAI's chat completions API endpoint to analyze text for grammar and spelling issues using GPT-4o-mini."
+  },
+  "permissions": [
+    "currentuser"
+  ]
+}
