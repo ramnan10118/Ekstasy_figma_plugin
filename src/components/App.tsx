@@ -5,8 +5,7 @@ import { IssuesList } from './IssuesList';
 import { LoadingState } from './LoadingState';
 import { EmptyState } from './EmptyState';
 import { BulkActions } from './BulkActions';
-import { checkTextBatchWithAI } from '../ai-service';
-import { BatchTextInput } from '../types';
+import { checkTextWithLanguageTool } from '../ai-service';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -16,21 +15,18 @@ export const App: React.FC = () => {
     layers, 
     isScanning, 
     isProcessing, 
-    batchProgress,
     setLayers, 
     setScanning,
     setProcessing,
-    setBatchProgress,
     getPendingIssuesCount 
   } = usePluginStore();
   
   console.log('UI: App component state:', { layers: layers.length, isScanning, isProcessing });
 
-  // Batch processing function for AI analysis
+  // Simple individual processing function for LanguageTool
   const processTextLayersAsync = async (textLayers: any[]) => {
-    console.log('UI: Starting batch AI processing for', textLayers.length, 'layers');
+    console.log('UI: Starting LanguageTool processing for', textLayers.length, 'layers');
     setProcessing(true);
-    setBatchProgress(undefined);
     
     try {
       // Handle empty layers case
@@ -42,101 +38,48 @@ export const App: React.FC = () => {
         return;
       }
       
-      // Filter layers with text content
-      const layersWithText = textLayers.filter(layer => layer.text && layer.text.trim());
-      console.log('UI: Filtered to', layersWithText.length, 'layers with text content');
-      
       // Initialize all layers with empty issues
       textLayers.forEach(layer => {
         layer.issues = [];
       });
       
-      if (layersWithText.length === 0) {
-        console.log('UI: No layers with text content to process');
-        setLayers(textLayers);
-        setScanning(false);
-        setProcessing(false);
-        return;
-      }
-      
-      // Create batch inputs
-      const batchSize = 8; // Process 8 texts per API call
-      const batches: BatchTextInput[][] = [];
-      
-      for (let i = 0; i < layersWithText.length; i += batchSize) {
-        const batch = layersWithText.slice(i, i + batchSize).map(layer => ({
-          id: `text-${i + layersWithText.indexOf(layer) + 1}`,
-          text: layer.text,
-          layerId: layer.id,
-          layerName: layer.name
-        }));
-        batches.push(batch);
-      }
-      
-      console.log('UI: Created', batches.length, 'batches for processing');
-      
-      // Process batches sequentially
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        console.log(`UI: Processing batch ${batchIndex + 1} of ${batches.length} with ${batch.length} texts`);
-        
-        // Update progress
-        setBatchProgress({
-          currentBatch: batchIndex + 1,
-          totalBatches: batches.length,
-          processedLayers: batchIndex * batchSize,
-          totalLayers: layersWithText.length
-        });
-        
-        try {
-          const batchResults = await checkTextBatchWithAI(batch);
-          console.log(`UI: Batch ${batchIndex + 1} completed with results:`, batchResults);
-          
-          // Apply results to layers
-          batchResults.forEach(result => {
-            const batchInput = batch.find(input => input.id === result.textId);
-            if (batchInput) {
-              const layer = textLayers.find(l => l.id === batchInput.layerId);
-              if (layer) {
-                layer.issues = result.issues.map(issue => ({
-                  ...issue,
-                  layerId: layer.id,
-                  layerName: layer.name,
-                  status: 'pending' as const
-                }));
-                console.log(`UI: Applied ${layer.issues.length} issues to layer:`, layer.name);
-              }
-            }
-          });
-          
-          // Update UI with partial results (streaming)
-          setLayers([...textLayers]);
-          
-        } catch (error) {
-          console.error(`UI: Batch ${batchIndex + 1} failed:`, error);
-          // Continue with next batch even if one fails
+      // Process each text layer individually (LanguageTool is fast enough!)
+      for (const layer of textLayers) {
+        if (layer.text && layer.text.trim()) {
+          console.log('UI: Processing layer with LanguageTool:', layer.name, 'Text:', layer.text.substring(0, 50) + '...');
+          try {
+            const issues = await checkTextWithLanguageTool(layer.text);
+            console.log('UI: LanguageTool returned issues for layer:', layer.name, issues);
+            
+            // Convert issues to TextIssue format
+            layer.issues = issues.map(issue => ({
+              ...issue,
+              layerId: layer.id,
+              layerName: layer.name,
+              status: 'pending' as const
+            }));
+            
+            console.log('UI: Added LanguageTool issues to layer:', layer.name, layer.issues.length);
+          } catch (error) {
+            console.error('UI: LanguageTool processing failed for layer:', layer.name, error);
+            // Keep empty issues array on error
+            layer.issues = [];
+          }
+        } else {
+          console.log('UI: Skipping layer with no text:', layer.name);
         }
       }
       
-      // Final update
-      setBatchProgress({
-        currentBatch: batches.length,
-        totalBatches: batches.length,
-        processedLayers: layersWithText.length,
-        totalLayers: layersWithText.length
-      });
-      
-      console.log('UI: All batches processed, final layers:', textLayers);
+      console.log('UI: All layers processed, final layers:', textLayers);
       setLayers(textLayers);
       setScanning(false);
       setProcessing(false);
-      setBatchProgress(undefined);
+      console.log('UI: Set layers and stopped scanning/processing');
       
     } catch (error) {
-      console.error('UI: Overall batch processing failed:', error);
+      console.error('UI: Overall LanguageTool processing failed:', error);
       setScanning(false);
       setProcessing(false);
-      setBatchProgress(undefined);
     }
   };
 
@@ -301,13 +244,7 @@ export const App: React.FC = () => {
       
       {isProcessing && (
         <div className="processing-overlay">
-          {batchProgress ? (
-            <LoadingState 
-              message={`Processing batch ${batchProgress.currentBatch} of ${batchProgress.totalBatches}... (${batchProgress.processedLayers}/${batchProgress.totalLayers} texts)`} 
-            />
-          ) : (
-            <LoadingState message="Processing fixes..." />
-          )}
+          <LoadingState message="Checking grammar and spelling..." />
         </div>
       )}
     </div>

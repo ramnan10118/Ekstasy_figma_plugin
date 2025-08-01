@@ -1,12 +1,11 @@
 import { create } from 'zustand';
-import { TextLayer, TextIssue, PluginState, BatchProgress } from './types';
+import { TextLayer, TextIssue, PluginState } from './types';
 
 interface PluginStore extends PluginState {
   setLayers: (layers: TextLayer[]) => void;
   setScanning: (isScanning: boolean) => void;
   setProcessing: (isProcessing: boolean) => void;
   setViewMode: (mode: 'by-layer' | 'by-text') => void;
-  setBatchProgress: (progress: BatchProgress | undefined) => void;
   toggleIssueSelection: (issueId: string) => void;
   selectAllIssues: () => void;
   clearSelection: () => void;
@@ -22,7 +21,6 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
   isProcessing: false,
   viewMode: 'by-layer',
   selectedIssues: [],
-  batchProgress: undefined,
 
   setLayers: (layers) => set({ layers }),
   
@@ -31,8 +29,6 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
   setProcessing: (isProcessing) => set({ isProcessing }),
   
   setViewMode: (viewMode) => set({ viewMode }),
-  
-  setBatchProgress: (batchProgress) => set({ batchProgress }),
   
   toggleIssueSelection: (issueId) => set((state) => ({
     selectedIssues: state.selectedIssues.includes(issueId)

@@ -72,25 +72,10 @@ export interface ScanCompleteMessage extends PluginMessage {
   };
 }
 
-export interface BatchTextInput {
-  id: string;
-  text: string;
-  layerId: string;
-  layerName: string;
-}
-
-export interface BatchProgress {
-  currentBatch: number;
-  totalBatches: number;
-  processedLayers: number;
-  totalLayers: number;
-}
-
 export interface PluginState {
   layers: TextLayer[];
   isScanning: boolean;
   isProcessing: boolean;
   viewMode: 'by-layer' | 'by-text';
   selectedIssues: string[];
-  batchProgress?: BatchProgress;
 }

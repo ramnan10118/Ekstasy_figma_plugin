@@ -11,9 +11,9 @@
   ],
   "networkAccess": {
     "allowedDomains": [
-      "https://api.openai.com/v1/chat/completions"
+      "https://api.languagetool.org"
     ],
-    "reasoning": "This plugin needs to connect to OpenAI's chat completions API endpoint to analyze text for grammar and spelling issues using GPT-4o-mini."
+    "reasoning": "This plugin needs to connect to LanguageTool's API endpoint to analyze text for grammar and spelling issues using their specialized grammar checking service."
   },
   "permissions": [
     "currentuser"

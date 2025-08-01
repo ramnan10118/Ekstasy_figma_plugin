@@ -1,15 +1,16 @@
 # Figma Grammar Checker Plugin (Ekstasy)
 
-An AI-powered grammar and text checker plugin for Figma that helps you find and fix grammar, spelling, and style issues in your designs.
+A lightning-fast grammar and text checker plugin for Figma that helps you find and fix grammar, spelling, and style issues in your designs.
 
 ## Features
 
-- 🤖 **AI-Powered Analysis**: Uses OpenAI's GPT-4 to analyze text for issues
-- 🔍 **Smart Detection**: Finds grammar, spelling, and style problems
-- ⚡ **Bulk Operations**: Fix multiple issues at once with one click
+- ⚡ **Lightning Fast**: Uses LanguageTool API for near-instant grammar checking
+- 🔍 **Smart Detection**: Finds grammar, spelling, and style problems with high accuracy
+- 🚀 **Bulk Operations**: Fix multiple issues at once with one click
 - 🎯 **Layer Navigation**: Jump directly to problematic text layers
 - 📊 **Organized View**: Group issues by layer or by text
 - 🎨 **Figma-Native UI**: Clean interface that matches Figma's design
+- 💰 **Cost-Effective**: Uses free LanguageTool API (no expensive AI costs)
 
 ## Setup
 
@@ -23,21 +24,13 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for simple installation instructions.
    npm install
    ```
 
-2. **Configure API Key**:
-   ```bash
-   # Copy environment template
-   cp .env.example .env
-   
-   # Add your OpenAI API key to .env
-   OPENAI_API_KEY=sk-your-api-key-here
-   ```
-
-3. **Build the Plugin**:
+2. **Build the Plugin**:
    ```bash
    npm run build
    ```
+   *No API key configuration needed - LanguageTool public API is free!*
 
-4. **Load in Figma**:
+3. **Load in Figma**:
    - Open Figma Desktop
    - Go to Plugins → Development → Import plugin from manifest
    - Select the `manifest.json` file in this directory
@@ -65,22 +58,22 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for simple installation instructions.
 ## How It Works
 
 1. **Text Extraction**: Scans all text layers in the current Figma page
-2. **AI Analysis**: Sends text to OpenAI GPT-4 for grammar/spell checking
-3. **Smart Suggestions**: Provides contextual corrections and improvements
+2. **LanguageTool Analysis**: Sends text to LanguageTool API for grammar/spell checking
+3. **Smart Suggestions**: Provides accurate corrections and improvements
 4. **Non-Destructive**: All changes can be undone using Figma's history
-5. **Bulk Processing**: Handles multiple corrections efficiently
+5. **Fast Processing**: Handles individual texts quickly (no batching needed!)
 
 ## Architecture
 
 - **Frontend**: React + TypeScript with Zustand state management
-- **AI Integration**: Direct OpenAI API calls with fetch
+- **Grammar Service**: LanguageTool API integration with fetch
 - **Build Tool**: Webpack with TypeScript compilation
 - **Styling**: CSS with Figma design system patterns
 
 ## API Usage
 
-The plugin uses OpenAI's API to analyze text. The API key is embedded during the build process for seamless team usage. For team deployment, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+The plugin uses LanguageTool's free public API to analyze text. No API key configuration is required! For team deployment, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ---
 
-Built with ❤️ using React, TypeScript, and OpenAI GPT-4o-mini
+Built with ❤️ using React, TypeScript, and LanguageTool
