@@ -7,11 +7,8 @@ figma.showUI(__html__, {
   themeColors: true 
 });
 
-// Listen for selection changes to auto-rescan
-figma.on('selectionchange', () => {
-  // Auto-rescan when selection changes
-  scanTextLayers();
-});
+// Note: Removed auto-rescan on selection change to preserve issue list when jumping to layers
+// Users can manually rescan using the "Check Layers" button if needed
 
 // API key is now embedded at build time
 
@@ -36,35 +33,45 @@ function extractTextLayers(): TextLayer[] {
     }
   }
   
-  // Check if there's a selection first
-  if (figma.currentPage.selection.length > 0) {
-    // Scan only selected nodes
-    figma.currentPage.selection.forEach(selectedNode => {
-      if (selectedNode.type === 'FRAME') {
-        traverse(selectedNode, selectedNode.name);
-      } else {
-        traverse(selectedNode);
-      }
-    });
-  } else {
-    // Scan all frames on the page
-    figma.currentPage.children.forEach(node => {
-      if (node.type === 'FRAME') {
-        traverse(node, node.name);
-      }
-    });
-  }
+  // Always scan all frames on the page for consistent behavior
+  // This ensures "Check Layers" button always finds all issues regardless of selection
+  figma.currentPage.children.forEach(node => {
+    if (node.type === 'FRAME') {
+      traverse(node, node.name);
+    }
+  });
   
   return textLayers;
 }
 
-// Function to apply text fix to a layer
-function applyTextFix(layerId: string, newText: string) {
+// Simple and reliable text replacement function
+function applyTextFix(layerId: string, suggestion: string, issueText: string) {
   const node = figma.getNodeById(layerId);
   if (node && node.type === 'TEXT') {
     // Load the font before changing text
     figma.loadFontAsync(node.fontName as FontName).then(() => {
-      (node as TextNode).characters = newText;
+      const currentText = (node as TextNode).characters;
+      
+      console.log('Applying text fix:', {
+        currentText: currentText,
+        issueText: issueText,
+        suggestion: suggestion
+      });
+      
+      // Simple direct replacement - find exact issue text and replace with suggestion
+      if (currentText.includes(issueText)) {
+        const newText = currentText.replace(issueText, suggestion);
+        console.log('Replacement successful:', {
+          original: currentText,
+          new: newText
+        });
+        (node as TextNode).characters = newText;
+      } else {
+        console.error('Issue text not found in current text:', {
+          issueText,
+          currentText
+        });
+      }
     }).catch(err => {
       console.error('Failed to load font:', err);
     });
@@ -127,12 +134,12 @@ figma.ui.onmessage = (message: PluginMessage) => {
       break;
       
     case 'apply-fix':
-      applyTextFix(message.data.layerId, message.data.newText);
+      applyTextFix(message.data.layerId, message.data.suggestion, message.data.issueText);
       break;
       
     case 'apply-bulk-fix':
       for (const fix of message.data.fixes) {
-        applyTextFix(fix.layerId, fix.newText);
+        applyTextFix(fix.layerId, fix.suggestion, fix.issueText);
       }
       figma.ui.postMessage({
         type: 'bulk-fix-complete'

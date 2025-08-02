@@ -49,6 +49,8 @@ module.exports = (env, argv) => ({
       inject: 'body'
     }),
     new HtmlInlineScriptPlugin(),
-    // No API key needed for LanguageTool public API
+    new webpack.DefinePlugin({
+      'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY)
+    })
   ],
 });

@@ -53,26 +53,21 @@
   color: #666;
 }
 
-.view-toggle {
+.issues-indicator {
   display: flex;
-  background: #f0f0f0;
-  border-radius: 6px;
-  padding: 2px;
+  align-items: center;
+  margin-right: 12px;
 }
 
-.toggle-button {
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
+.issues-count-red {
+  background: #ef4444;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
   font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toggle-button.active {
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+  min-width: 60px;
+  text-align: center;
 }
 
 .settings-button {
@@ -158,7 +153,7 @@
 }
 
 .issue-status.warning {
-  background: #f59e0b;
+  background: #ff6b35;
 }
 
 .issue-status::after {
@@ -179,7 +174,7 @@
 .issue-type {
   font-size: 11px;
   font-weight: 600;
-  color: #f59e0b;
+  color: #ff6b35;
   margin-bottom: 4px;
 }
 

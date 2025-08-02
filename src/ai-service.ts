@@ -1,4 +1,34 @@
-import { TextIssue } from './types';
+import { TextIssue, TextLayer } from './types';
+
+// OpenAI API interfaces
+interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface OpenAIResponse {
+  choices: Array<{
+    message: {
+      content: string;
+    };
+  }>;
+}
+
+interface OpenAIGrammarResult {
+  [layerId: string]: {
+    issues: Array<{
+      originalText: string;
+      issueText: string;
+      suggestion: string;
+      type: 'grammar' | 'spelling' | 'style';
+      confidence: number;
+      position: {
+        start: number;
+        end: number;
+      };
+    }>;
+  };
+}
 
 interface LanguageToolMatch {
   message: string;
@@ -21,53 +51,166 @@ interface LanguageToolResponse {
   matches: LanguageToolMatch[];
 }
 
-// Simple fallback grammar checker using basic rules
-function checkTextWithBasicRules(text: string): Omit<TextIssue, 'layerId' | 'layerName' | 'status'>[] {
-  const issues: Omit<TextIssue, 'layerId' | 'layerName' | 'status'>[] = [];
-  
-  // Common grammar/spelling patterns
-  const patterns = [
-    { pattern: /\bteh\b/gi, replacement: 'the', type: 'spelling' as const },
-    { pattern: /\brecieve\b/gi, replacement: 'receive', type: 'spelling' as const },
-    { pattern: /\boccured\b/gi, replacement: 'occurred', type: 'spelling' as const },
-    { pattern: /\bseperate\b/gi, replacement: 'separate', type: 'spelling' as const },
-    { pattern: /\bdefinately\b/gi, replacement: 'definitely', type: 'spelling' as const },
-    { pattern: /\bi\b/g, replacement: 'I', type: 'grammar' as const },
-    { pattern: /\byour\s+welcome\b/gi, replacement: "you're welcome", type: 'grammar' as const },
-    { pattern: /\bits\s+/gi, replacement: "it's ", type: 'grammar' as const, condition: (match: string, text: string, index: number) => {
-      // Only suggest "it's" if it seems like a contraction context
-      const before = text.substring(Math.max(0, index - 10), index);
-      const after = text.substring(index + match.length, index + match.length + 10);
-      return !before.includes('of') && !after.includes('own');
-    }}
-  ];
-  
-  patterns.forEach((rule, ruleIndex) => {
-    let match;
-    const regex = new RegExp(rule.pattern.source, rule.pattern.flags);
-    
-    while ((match = regex.exec(text)) !== null) {
-      // Check condition if it exists
-      if (rule.condition && !rule.condition(match[0], text, match.index)) {
-        continue;
-      }
-      
-      issues.push({
-        id: `basic-${ruleIndex}-${match.index}`,
-        originalText: text,
-        issueText: match[0],
-        suggestion: rule.replacement,
-        type: rule.type,
-        confidence: 0.8,
-        position: {
-          start: match.index,
-          end: match.index + match[0].length
-        }
-      });
+// Optimized OpenAI batch processing for all text layers
+export async function checkTextLayersWithOpenAI(textLayers: TextLayer[]): Promise<TextLayer[]> {
+  try {
+    if (!textLayers || textLayers.length === 0) {
+      console.log('No text layers to process');
+      return textLayers;
     }
-  });
-  
-  return issues;
+
+    console.log('Starting OpenAI batch processing for', textLayers.length, 'layers');
+
+    // Prepare batch data for OpenAI
+    const batchData: Record<string, string> = {};
+    textLayers.forEach(layer => {
+      if (layer.text && layer.text.trim()) {
+        batchData[layer.id] = layer.text;
+      }
+    });
+
+    if (Object.keys(batchData).length === 0) {
+      console.log('No valid text content to process');
+      return textLayers;
+    }
+
+    // Create system prompt for grammar checking
+    const systemPrompt = `You are a professional grammar and spell checker. Analyze the provided text layers and identify ALL grammar, spelling, and style errors.
+
+For each layer, return ONLY errors found, with precise character positions. Return valid JSON in this exact format:
+
+{
+  "layer_id": {
+    "issues": [
+      {
+        "originalText": "full original text of the layer",
+        "issueText": "the problematic text portion",
+        "suggestion": "corrected version",
+        "type": "grammar|spelling|style",
+        "confidence": 0.9,
+        "position": {
+          "start": 0,
+          "end": 5
+        }
+      }
+    ]
+  }
+}
+
+IMPORTANT:
+- Include ALL errors, even minor ones
+- Provide complete, grammatically correct suggestions
+- Be precise with character positions (0-indexed)
+- If no errors in a layer, return empty issues array
+- Return only valid JSON, no explanations`;
+
+    const userPrompt = `Check these text layers for grammar, spelling, and style errors:\n\n${JSON.stringify(batchData, null, 2)}`;
+
+    const messages: OpenAIMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    console.log('Making OpenAI API request...');
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: messages,
+        temperature: 0.1,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', response.status, errorText);
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const result: OpenAIResponse = await response.json();
+    console.log('OpenAI API response received');
+
+    const aiContent = result.choices[0]?.message?.content;
+    if (!aiContent) {
+      throw new Error('No content received from OpenAI');
+    }
+
+    console.log('Raw OpenAI response:', aiContent);
+
+    // Parse JSON response
+    let grammarResults: OpenAIGrammarResult;
+    try {
+      // Clean up potential JSON formatting issues
+      const cleanedContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      grammarResults = JSON.parse(cleanedContent);
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI JSON response:', parseError);
+      console.error('Raw content:', aiContent);
+      throw new Error('Invalid JSON response from OpenAI');
+    }
+
+    // Convert OpenAI results to our TextIssue format
+    const updatedLayers = textLayers.map(layer => {
+      const layerResults = grammarResults[layer.id];
+      if (!layerResults || !layerResults.issues) {
+        return { ...layer, issues: [] };
+      }
+
+      const issues: TextIssue[] = layerResults.issues.map((issue, index) => ({
+        id: `openai-${layer.id}-${index}`,
+        layerId: layer.id,
+        layerName: layer.name,
+        originalText: issue.originalText,
+        issueText: issue.issueText,
+        suggestion: issue.suggestion,
+        type: issue.type,
+        confidence: issue.confidence,
+        position: issue.position,
+        status: 'pending' as const
+      }));
+
+      return { ...layer, issues };
+    });
+
+    console.log('Processed', updatedLayers.length, 'layers with OpenAI results');
+    return updatedLayers;
+
+  } catch (error) {
+    console.error('OpenAI batch processing failed:', error);
+    
+    // Fallback to LanguageTool for individual layers
+    console.log('Falling back to LanguageTool processing...');
+    const fallbackLayers = await Promise.all(
+      textLayers.map(async (layer) => {
+        if (!layer.text || !layer.text.trim()) {
+          return { ...layer, issues: [] };
+        }
+        
+        try {
+          const fallbackIssues = await checkTextWithLanguageTool(layer.text);
+          const issues: TextIssue[] = fallbackIssues.map((issue, index) => ({
+            ...issue,
+            id: `fallback-${layer.id}-${index}`,
+            layerId: layer.id,
+            layerName: layer.name,
+            status: 'pending' as const
+          }));
+          return { ...layer, issues };
+        } catch (fallbackError) {
+          console.error('Fallback also failed for layer', layer.id, fallbackError);
+          return { ...layer, issues: [] };
+        }
+      })
+    );
+    
+    return fallbackLayers;
+  }
 }
 
 export async function checkTextWithLanguageTool(text: string): Promise<Omit<TextIssue, 'layerId' | 'layerName' | 'status'>[]> {
@@ -76,32 +219,11 @@ export async function checkTextWithLanguageTool(text: string): Promise<Omit<Text
       return [];
     }
 
-    console.log('Starting LanguageTool text analysis for:', text.substring(0, 50) + '...');
-    
-    // For testing: if text contains "test", add a demo issue
-    if (text.toLowerCase().includes('test')) {
-      console.log('DEBUG: Adding demo issue for testing');
-      return [{
-        id: 'demo-test-1',
-        originalText: text,
-        issueText: 'test',
-        suggestion: 'demo',
-        type: 'style' as const,
-        confidence: 0.9,
-        position: { start: text.toLowerCase().indexOf('test'), end: text.toLowerCase().indexOf('test') + 4 }
-      }];
-    }
-
-    // Use CORS-enabled LanguageTool API endpoint
     const baseUrl = 'https://api.languagetool.org/v2/check';
-    
-    // Create URL-encoded form data for better CORS compatibility
     const params = new URLSearchParams();
     params.append('text', text);
     params.append('language', 'en-US');
     params.append('enabledOnly', 'false');
-
-    console.log('Making request to LanguageTool API...');
 
     const response = await fetch(baseUrl, {
       method: 'POST',
@@ -111,69 +233,58 @@ export async function checkTextWithLanguageTool(text: string): Promise<Omit<Text
       body: params.toString()
     });
 
-    console.log('Response status:', response.status);
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('LanguageTool API error response:', errorText);
-      throw new Error(`LanguageTool API error: ${response.status} - ${errorText}`);
+      throw new Error(`LanguageTool API error: ${response.status}`);
     }
 
     const data: LanguageToolResponse = await response.json();
-    console.log('LanguageTool API response received:', data);
     
     if (!data.matches || data.matches.length === 0) {
-      console.log('No grammar/spelling issues found');
       return [];
     }
 
-    console.log('Processing', data.matches.length, 'matches from LanguageTool');
-
-    // Convert LanguageTool matches to our TextIssue format
-    const issues = data.matches.map((match, index) => {
-      const issueText = text.substring(match.offset, match.offset + match.length);
-      const suggestion = match.replacements.length > 0 ? match.replacements[0].value : issueText;
-      
-      // Determine issue type based on rule category
-      let issueType: 'grammar' | 'spelling' | 'style' = 'grammar';
-      if (match.rule.category.id === 'TYPOS') {
-        issueType = 'spelling';
-      } else if (match.rule.category.id === 'STYLE') {
-        issueType = 'style';
-      }
-
-      return {
-        id: `lt-${match.rule.id}-${index}`,
-        originalText: text,
-        issueText: issueText,
-        suggestion: suggestion,
-        type: issueType,
-        confidence: 0.9, // LanguageTool is generally very accurate
-        position: {
-          start: match.offset,
-          end: match.offset + match.length
+    const issues = data.matches
+      .filter((match) => {
+        if (match.replacements.length === 0) return false;
+        
+        const issueText = text.substring(match.offset, match.offset + match.length);
+        const suggestion = match.replacements[0].value;
+        
+        if (issueText === suggestion) return false;
+        if (/^\d[\d,.\s]*$/.test(issueText.trim())) return false;
+        if (!suggestion || !suggestion.trim()) return false;
+        
+        return true;
+      })
+      .map((match, index) => {
+        const issueText = text.substring(match.offset, match.offset + match.length);
+        const suggestion = match.replacements[0].value;
+        
+        let issueType: 'grammar' | 'spelling' | 'style' = 'grammar';
+        if (match.rule.category.id === 'TYPOS') {
+          issueType = 'spelling';
+        } else if (match.rule.category.id === 'STYLE') {
+          issueType = 'style';
         }
-      };
-    });
 
-    console.log('Converted to', issues.length, 'text issues');
+        return {
+          id: `lt-${match.rule.id}-${index}`,
+          originalText: text,
+          issueText: issueText,
+          suggestion: suggestion,
+          type: issueType,
+          confidence: 0.9,
+          position: {
+            start: match.offset,
+            end: match.offset + match.length
+          }
+        };
+      });
+
     return issues;
 
   } catch (error) {
-    console.error('LanguageTool text analysis failed:', error);
-    console.error('Error details:', {
-      message: error.message,
-      name: error.name,
-      stack: error.stack
-    });
-    
-    // Check if it's a CORS or network error
-    if (error.message.includes('CORS') || error.message.includes('fetch')) {
-      console.error('CORS or network error detected - using basic fallback grammar checker');
-    }
-    
-    // Use fallback basic grammar checker when LanguageTool fails
-    console.log('Using fallback basic grammar checker for:', text.substring(0, 50) + '...');
-    return checkTextWithBasicRules(text);
+    console.error('LanguageTool failed:', error);
+    return [];
   }
 }

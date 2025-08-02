@@ -31,7 +31,9 @@ export const BulkActions: React.FC = () => {
     const fixes = issuesToFix.map(issue => ({
       layerId: issue.layerId,
       issueId: issue.id,
-      newText: issue.suggestion
+      suggestion: issue.suggestion,
+      position: issue.position,
+      originalText: issue.originalText
     }));
 
     parent.postMessage({

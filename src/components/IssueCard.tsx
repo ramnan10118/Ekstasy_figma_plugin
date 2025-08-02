@@ -4,11 +4,9 @@ import { TextIssue } from '../types';
 
 interface IssueCardProps {
   issue: TextIssue;
-  layerName: string;
-  frameName?: string;
 }
 
-export const IssueCard: React.FC<IssueCardProps> = ({ issue, layerName, frameName }) => {
+export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   const { 
     selectedIssues, 
     toggleIssueSelection, 
@@ -33,7 +31,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, layerName, frameNam
         data: {
           layerId: issue.layerId,
           issueId: issue.id,
-          newText: issue.suggestion
+          suggestion: issue.suggestion,
+          issueText: issue.issueText
         }
       }
     }, '*');
@@ -62,18 +61,12 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, layerName, frameNam
         
         <div className="issue-content">
           <div className={`issue-type ${issue.status === 'accepted' ? 'correct' : ''}`}>
-            {issue.status === 'accepted' ? 'Correct' : 'Confirm?'}
+            {issue.status === 'accepted' ? 'Correct' : issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
           </div>
           
           <div className="issue-text">
             {issue.originalText}
           </div>
-          
-          {frameName && (
-            <div style={{ fontSize: '10px', color: '#999', marginTop: '4px' }}>
-              Frame: {frameName} • Layer: {layerName}
-            </div>
-          )}
           
           {issue.status === 'pending' && issue.suggestion && (
             <div className="suggestion-bubble">
@@ -84,27 +77,34 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, layerName, frameNam
         </div>
         
         <div className="issue-actions">
-          <a className="jump-link" onClick={handleJumpToLayer}>
-            jump to layer
-          </a>
+          {/* Moved jump to layer button to bottom with other actions */}
         </div>
       </div>
       
       {isPending && (
-        <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
-          <button 
-            className="bulk-button primary"
-            onClick={handleApplyFix}
-            style={{ fontSize: '10px', padding: '4px 8px' }}
-          >
-            Apply Fix
-          </button>
+        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              className="bulk-button primary"
+              onClick={handleApplyFix}
+              style={{ fontSize: '10px', padding: '4px 8px' }}
+            >
+              Apply Fix
+            </button>
+            <button 
+              className="bulk-button"
+              onClick={handleDismiss}
+              style={{ fontSize: '10px', padding: '4px 8px' }}
+            >
+              Dismiss
+            </button>
+          </div>
           <button 
             className="bulk-button"
-            onClick={handleDismiss}
+            onClick={handleJumpToLayer}
             style={{ fontSize: '10px', padding: '4px 8px' }}
           >
-            Dismiss
+            Jump to Layer
           </button>
         </div>
       )}

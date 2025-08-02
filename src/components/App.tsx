@@ -5,7 +5,7 @@ import { IssuesList } from './IssuesList';
 import { LoadingState } from './LoadingState';
 import { EmptyState } from './EmptyState';
 import { BulkActions } from './BulkActions';
-import { checkTextWithLanguageTool } from '../ai-service';
+import { checkTextLayersWithOpenAI } from '../ai-service';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -23,9 +23,9 @@ export const App: React.FC = () => {
   
   console.log('UI: App component state:', { layers: layers.length, isScanning, isProcessing });
 
-  // Simple individual processing function for LanguageTool
+  // OpenAI batch processing (original working implementation)
   const processTextLayersAsync = async (textLayers: any[]) => {
-    console.log('UI: Starting LanguageTool processing for', textLayers.length, 'layers');
+    console.log('UI: Starting OpenAI batch processing for', textLayers.length, 'layers');
     setProcessing(true);
     
     try {
@@ -38,46 +38,18 @@ export const App: React.FC = () => {
         return;
       }
       
-      // Initialize all layers with empty issues
-      textLayers.forEach(layer => {
-        layer.issues = [];
-      });
+      // Use the original OpenAI batch processing
+      console.log('UI: Calling OpenAI batch processor...');
+      const processedLayers = await checkTextLayersWithOpenAI(textLayers);
       
-      // Process each text layer individually (LanguageTool is fast enough!)
-      for (const layer of textLayers) {
-        if (layer.text && layer.text.trim()) {
-          console.log('UI: Processing layer with LanguageTool:', layer.name, 'Text:', layer.text.substring(0, 50) + '...');
-          try {
-            const issues = await checkTextWithLanguageTool(layer.text);
-            console.log('UI: LanguageTool returned issues for layer:', layer.name, issues);
-            
-            // Convert issues to TextIssue format
-            layer.issues = issues.map(issue => ({
-              ...issue,
-              layerId: layer.id,
-              layerName: layer.name,
-              status: 'pending' as const
-            }));
-            
-            console.log('UI: Added LanguageTool issues to layer:', layer.name, layer.issues.length);
-          } catch (error) {
-            console.error('UI: LanguageTool processing failed for layer:', layer.name, error);
-            // Keep empty issues array on error
-            layer.issues = [];
-          }
-        } else {
-          console.log('UI: Skipping layer with no text:', layer.name);
-        }
-      }
-      
-      console.log('UI: All layers processed, final layers:', textLayers);
-      setLayers(textLayers);
+      console.log('UI: OpenAI batch processing complete, processed layers:', processedLayers);
+      setLayers(processedLayers);
       setScanning(false);
       setProcessing(false);
       console.log('UI: Set layers and stopped scanning/processing');
       
     } catch (error) {
-      console.error('UI: Overall LanguageTool processing failed:', error);
+      console.error('UI: OpenAI batch processing failed:', error);
       setScanning(false);
       setProcessing(false);
     }

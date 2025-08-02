@@ -11,9 +11,10 @@
   ],
   "networkAccess": {
     "allowedDomains": [
+      "https://api.openai.com",
       "https://api.languagetool.org"
     ],
-    "reasoning": "This plugin needs to connect to LanguageTool's API endpoint to analyze text for grammar and spelling issues using their specialized grammar checking service."
+    "reasoning": "This plugin needs to connect to OpenAI's API for advanced grammar checking and LanguageTool's API as a fallback service for grammar and spelling analysis."
   },
   "permissions": [
     "currentuser"
