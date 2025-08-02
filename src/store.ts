@@ -1,11 +1,13 @@
 import { create } from 'zustand';
-import { TextLayer, TextIssue, PluginState } from './types';
+import { TextLayer, TextIssue, PluginState, ScanProgress, ProcessingProgress } from './types';
 
 interface PluginStore extends PluginState {
   setLayers: (layers: TextLayer[]) => void;
   setScanning: (isScanning: boolean) => void;
   setProcessing: (isProcessing: boolean) => void;
   setViewMode: (mode: 'by-layer' | 'by-text') => void;
+  setScanProgress: (progress: ScanProgress) => void;
+  setProcessingProgress: (progress: ProcessingProgress) => void;
   toggleIssueSelection: (issueId: string) => void;
   selectAllIssues: () => void;
   clearSelection: () => void;
@@ -21,6 +23,8 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
   isProcessing: false,
   viewMode: 'by-layer',
   selectedIssues: [],
+  scanProgress: { textCount: 0, frameCount: 0 },
+  processingProgress: { completed: 0, total: 0 },
 
   setLayers: (layers) => set({ layers }),
   
@@ -29,6 +33,10 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
   setProcessing: (isProcessing) => set({ isProcessing }),
   
   setViewMode: (viewMode) => set({ viewMode }),
+  
+  setScanProgress: (scanProgress) => set({ scanProgress }),
+  
+  setProcessingProgress: (processingProgress) => set({ processingProgress }),
   
   toggleIssueSelection: (issueId) => set((state) => ({
     selectedIssues: state.selectedIssues.includes(issueId)

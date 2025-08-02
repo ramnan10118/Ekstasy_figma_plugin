@@ -66,6 +66,16 @@ function extractTextLayers(): TextLayer[] {
         issues: [],
         frameName: parentContainerName || 'Page Root'
       });
+      
+      // Send progress update to UI
+      figma.ui.postMessage({
+        type: 'scan-progress',
+        data: {
+          textCount: textLayers.length,
+          frameCount: scannedNodeCounts.FRAME
+        }
+      });
+      
       return; // Text nodes don't have children, so we can return early
     }
     
@@ -146,6 +156,47 @@ function extractTextLayers(): TextLayer[] {
   }
   
   return textLayers;
+}
+
+// Single fix handler
+async function handleSingleFix(layerId: string, issueId: string, suggestion: string, issueText: string) {
+  console.log('Main: Starting single fix for issue:', issueId, 'on layer:', layerId);
+  
+  try {
+    const success = await applyTextFixAsync(layerId, suggestion, issueText);
+    
+    if (success) {
+      console.log('Single fix successful for issue:', issueId);
+      figma.ui.postMessage({
+        type: 'fix-complete',
+        data: { 
+          success: true,
+          layerId,
+          issueId
+        }
+      });
+    } else {
+      console.log('Single fix failed for issue:', issueId);
+      figma.ui.postMessage({
+        type: 'fix-complete',
+        data: { 
+          success: false,
+          layerId,
+          issueId
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Single fix error for issue:', issueId, error);
+    figma.ui.postMessage({
+      type: 'fix-complete',
+      data: { 
+        success: false,
+        layerId,
+        issueId
+      }
+    });
+  }
 }
 
 // Async bulk fix handler
@@ -328,7 +379,7 @@ figma.ui.onmessage = (message: PluginMessage) => {
       break;
       
     case 'apply-fix':
-      applyTextFix(message.data.layerId, message.data.suggestion, message.data.issueText);
+      handleSingleFix(message.data.layerId, message.data.issueId, message.data.suggestion, message.data.issueText);
       break;
       
     case 'apply-bulk-fix':

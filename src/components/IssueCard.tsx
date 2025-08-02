@@ -23,8 +23,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   };
 
   const handleApplyFix = () => {
-    updateIssueStatus(issue.layerId, issue.id, 'accepted');
-    
     parent.postMessage({
       pluginMessage: {
         type: 'apply-fix',
@@ -38,9 +36,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     }, '*');
   };
 
-  const handleDismiss = () => {
-    updateIssueStatus(issue.layerId, issue.id, 'dismissed');
-  };
 
   const isSelected = selectedIssues.includes(issue.id);
   const isPending = issue.status === 'pending';
@@ -90,13 +85,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
               style={{ fontSize: '10px', padding: '4px 8px' }}
             >
               Apply Fix
-            </button>
-            <button 
-              className="bulk-button"
-              onClick={handleDismiss}
-              style={{ fontSize: '10px', padding: '4px 8px' }}
-            >
-              Dismiss
             </button>
           </div>
           <button 

@@ -18,15 +18,18 @@ export const App: React.FC = () => {
     setLayers, 
     setScanning,
     setProcessing,
-    getPendingIssuesCount 
+    setScanProgress,
+    setProcessingProgress,
+    getPendingIssuesCount
   } = usePluginStore();
   
   console.log('UI: App component state:', { layers: layers.length, isScanning, isProcessing });
 
-  // OpenAI individual processing (more accurate than batch)
+  // AI parallel processing (fast + accurate)
   const processTextLayersAsync = async (textLayers: any[]) => {
-    console.log('UI: Starting OpenAI individual processing for', textLayers.length, 'layers');
+    console.log('UI: Starting OpenAI parallel processing for', textLayers.length, 'layers');
     setProcessing(true);
+    setProcessingProgress({ completed: 0, total: textLayers.length });
     
     try {
       // Handle empty layers case
@@ -38,18 +41,20 @@ export const App: React.FC = () => {
         return;
       }
       
-      // Use individual OpenAI processing for better accuracy
-      console.log('UI: Calling OpenAI individual processor...');
-      const processedLayers = await checkTextLayersWithOpenAI(textLayers);
+      // Use parallel AI processing for speed + accuracy with progress tracking
+      console.log('UI: Calling OpenAI parallel processor...');
+      const processedLayers = await checkTextLayersWithOpenAI(textLayers, (completed, total) => {
+        setProcessingProgress({ completed, total });
+      });
       
-      console.log('UI: OpenAI individual processing complete, processed layers:', processedLayers);
+      console.log('UI: OpenAI parallel processing complete, processed layers:', processedLayers);
       setLayers(processedLayers);
       setScanning(false);
       setProcessing(false);
       console.log('UI: Set layers and stopped scanning/processing');
       
     } catch (error) {
-      console.error('UI: OpenAI batch processing failed:', error);
+      console.error('UI: OpenAI processing failed:', error);
       setScanning(false);
       setProcessing(false);
     }
@@ -76,9 +81,17 @@ export const App: React.FC = () => {
         case 'scan-started':
           console.log('UI: Setting scanning to true');
           setScanning(true);
+          setScanProgress({ textCount: 0, frameCount: 0 });
+          break;
+        case 'scan-progress':
+          console.log('UI: Scan progress update:', message.data);
+          setScanProgress(message.data);
           break;
         case 'process-text-layers':
           console.log('UI: Received process-text-layers message:', message.data);
+          // Transition from scanning to processing
+          setScanning(false);
+          
           // Process text layers with AI in UI thread
           const textLayers = message.data.layers;
           console.log('UI: Processing layers:', textLayers.length);
@@ -92,10 +105,12 @@ export const App: React.FC = () => {
           
           // Update status for successful fixes
           if (message.data && message.data.successfulFixes) {
-            const { updateIssueStatus } = usePluginStore.getState();
+            const { updateIssueStatus, clearSelection } = usePluginStore.getState();
             message.data.successfulFixes.forEach((fix: any) => {
               updateIssueStatus(fix.layerId, fix.issueId, 'accepted');
             });
+            // Clear selection since these issues are no longer pending
+            clearSelection();
           }
           
           // Show feedback to user
@@ -105,6 +120,24 @@ export const App: React.FC = () => {
               console.warn(`UI: Bulk fix completed with ${failCount} failures out of ${total} total fixes`);
             } else {
               console.log(`UI: All ${successCount} fixes applied successfully`);
+            }
+          }
+          break;
+        case 'fix-complete':
+          console.log('UI: Single fix completed:', message.data);
+          
+          // Update status for successful or failed fix
+          if (message.data) {
+            const { updateIssueStatus, clearSelection } = usePluginStore.getState();
+            const status = message.data.success ? 'accepted' : 'pending';
+            updateIssueStatus(message.data.layerId, message.data.issueId, status);
+            
+            if (message.data.success) {
+              console.log('UI: Single fix applied successfully for issue:', message.data.issueId);
+              // Clear selection since this issue is no longer pending
+              clearSelection();
+            } else {
+              console.log('UI: Single fix failed for issue:', message.data.issueId);
             }
           }
           break;
@@ -148,7 +181,11 @@ export const App: React.FC = () => {
   console.log('App render - isProcessing:', isProcessing);
 
   if (isScanning) {
-    return <LoadingState message="Scanning text layers..." />;
+    return <LoadingState type="scanning" />;
+  }
+
+  if (isProcessing) {
+    return <LoadingState type="processing" />;
   }
 
   if (layers.length === 0) {
@@ -232,12 +269,6 @@ export const App: React.FC = () => {
       <div className="content">
         <IssuesList />
       </div>
-      
-      {isProcessing && (
-        <div className="processing-overlay">
-          <LoadingState message="Analyzing each text individually for better accuracy..." />
-        </div>
-      )}
     </div>
   );
 };

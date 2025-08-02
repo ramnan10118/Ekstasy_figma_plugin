@@ -1,5 +1,5 @@
 {
-  "name": "Grammar Checker",
+  "name": "Ekstacy",
   "id": "1234567890",
   "api": "1.0.0",
   "main": "dist/code.js",
@@ -13,7 +13,7 @@
     "allowedDomains": [
       "https://api.openai.com"
     ],
-    "reasoning": "This plugin needs to connect to OpenAI's API for AI-powered grammar and spelling analysis."
+    "reasoning": "This plugin needs to connect to OpenAI's API for AI-powered text analysis."
   },
   "permissions": [
     "currentuser"

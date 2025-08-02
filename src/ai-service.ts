@@ -140,6 +140,7 @@ IMPORTANT:
   }
 }
 
+
 // OpenAI API interfaces
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -172,15 +173,23 @@ interface OpenAIGrammarResult {
 
 
 
-// Individual processing for all text layers (more accurate than batch)
-export async function checkTextLayersWithOpenAI(textLayers: TextLayer[]): Promise<TextLayer[]> {
+// Main OpenAI processing function
+export async function checkTextLayersWithOpenAI(
+  textLayers: TextLayer[], 
+  onProgress?: (completed: number, total: number) => void
+): Promise<TextLayer[]> {
   try {
     if (!textLayers || textLayers.length === 0) {
       console.log('No text layers to process');
       return textLayers;
     }
 
-    console.log('Starting OpenAI INDIVIDUAL processing for', textLayers.length, 'layers');
+    // Configuration for parallel processing
+    const CONCURRENT_REQUESTS = 4; // Process 4 texts simultaneously
+    const DELAY_BETWEEN_BATCHES = 200; // 200ms delay between batches to respect rate limits
+
+    console.log('Starting OpenAI PARALLEL processing for', textLayers.length, 'layers');
+    console.log(`Using ${CONCURRENT_REQUESTS} concurrent requests`);
 
     // Filter layers that have valid text content
     const validLayers = textLayers.filter(layer => layer.text && layer.text.trim());
@@ -190,27 +199,63 @@ export async function checkTextLayersWithOpenAI(textLayers: TextLayer[]): Promis
       return textLayers;
     }
 
-    console.log(`Processing ${validLayers.length} text layers individually...`);
+    console.log(`Processing ${validLayers.length} text layers in parallel batches...`);
     
-    // Process each text layer individually
+    // Split layers into batches for parallel processing
+    const batches: TextLayer[][] = [];
+    for (let i = 0; i < validLayers.length; i += CONCURRENT_REQUESTS) {
+      batches.push(validLayers.slice(i, i + CONCURRENT_REQUESTS));
+    }
+
+    console.log(`Created ${batches.length} batches of ${CONCURRENT_REQUESTS} texts each`);
+    
     const processedLayers: TextLayer[] = [];
+    let totalProcessed = 0;
     
-    for (let i = 0; i < validLayers.length; i++) {
-      const layer = validLayers[i];
-      console.log(`Processing ${i + 1}/${validLayers.length}: "${layer.text}" (${layer.name})`);
+    // Process batches sequentially, but texts within each batch in parallel
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      console.log(`\n=== Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} texts) ===`);
       
       try {
-        const processedLayer = await checkSingleTextWithOpenAI(layer);
-        processedLayers.push(processedLayer);
-        console.log(`✓ Completed ${i + 1}/${validLayers.length}: Found ${processedLayer.issues.length} issues`);
+        // Process all texts in this batch simultaneously
+        const batchPromises = batch.map(async (layer, indexInBatch) => {
+          const globalIndex = totalProcessed + indexInBatch + 1;
+          console.log(`🔄 Starting ${globalIndex}/${validLayers.length}: "${layer.text}" (${layer.name})`);
+          
+          try {
+            const processedLayer = await checkSingleTextWithOpenAI(layer);
+            console.log(`✅ Completed ${globalIndex}/${validLayers.length}: Found ${processedLayer.issues.length} issues`);
+            return processedLayer;
+          } catch (error) {
+            console.error(`❌ Failed ${globalIndex}/${validLayers.length}:`, error);
+            return { ...layer, issues: [] };
+          }
+        });
+
+        // Wait for all texts in this batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        processedLayers.push(...batchResults);
+        totalProcessed += batch.length;
+
+        console.log(`✓ Batch ${batchIndex + 1}/${batches.length} complete (${totalProcessed}/${validLayers.length} total)`);
+        
+        // Send progress update
+        if (onProgress) {
+          onProgress(totalProcessed, validLayers.length);
+        }
+        
+        // Delay between batches to respect rate limits (except for the last batch)
+        if (batchIndex < batches.length - 1) {
+          console.log(`⏳ Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+        }
+        
       } catch (error) {
-        console.error(`✗ Failed ${i + 1}/${validLayers.length}:`, error);
-        processedLayers.push({ ...layer, issues: [] });
-      }
-      
-      // Small delay to avoid rate limiting
-      if (i < validLayers.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        console.error(`❌ Batch ${batchIndex + 1} failed:`, error);
+        // Add failed layers with empty issues
+        batch.forEach(layer => processedLayers.push({ ...layer, issues: [] }));
+        totalProcessed += batch.length;
       }
     }
 
@@ -220,8 +265,8 @@ export async function checkTextLayersWithOpenAI(textLayers: TextLayer[]): Promis
       return processedLayer || { ...originalLayer, issues: [] };
     });
 
-    console.log('=== INDIVIDUAL PROCESSING COMPLETE ===');
-    console.log(`Processed ${processedLayers.length} layers individually`);
+    console.log('\n=== PARALLEL PROCESSING COMPLETE ===');
+    console.log(`Processed ${processedLayers.length} layers with ${CONCURRENT_REQUESTS} concurrent requests`);
     
     const totalIssues = finalLayers.reduce((sum, layer) => sum + layer.issues.length, 0);
     console.log(`Total issues found: ${totalIssues}`);
@@ -229,7 +274,7 @@ export async function checkTextLayersWithOpenAI(textLayers: TextLayer[]): Promis
     return finalLayers;
 
   } catch (error) {
-    console.error('OpenAI individual processing failed:', error);
+    console.error('OpenAI parallel processing failed:', error);
     return textLayers.map(layer => ({ ...layer, issues: [] }));
   }
 }

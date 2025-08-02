@@ -73,10 +73,22 @@ export interface ScanCompleteMessage extends PluginMessage {
   };
 }
 
+export interface ScanProgress {
+  textCount: number;
+  frameCount: number;
+}
+
+export interface ProcessingProgress {
+  completed: number;
+  total: number;
+}
+
 export interface PluginState {
   layers: TextLayer[];
   isScanning: boolean;
   isProcessing: boolean;
   viewMode: 'by-layer' | 'by-text';
   selectedIssues: string[];
+  scanProgress: ScanProgress;
+  processingProgress: ProcessingProgress;
 }

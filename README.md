@@ -52,7 +52,6 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for simple installation instructions.
 3. **Review & Fix**:
    - Review each suggestion
    - Click "Apply Fix" for individual issues
-   - Use "Auto fix all" for bulk corrections
    - Jump to layers with the "jump to layer" link
 
 ## Development

@@ -5,10 +5,10 @@ export const BulkActions: React.FC = () => {
   const { 
     selectedIssues, 
     selectAllIssues, 
-    clearSelection, 
+    clearSelection,
     getSelectedIssues,
     getPendingIssuesCount,
-    setProcessing 
+    setProcessing
   } = usePluginStore();
 
   const pendingCount = getPendingIssuesCount();
@@ -22,7 +22,8 @@ export const BulkActions: React.FC = () => {
     }
   };
 
-  const handleAutoFixAll = () => {
+
+  const handleApplySelected = () => {
     const issuesToFix = getSelectedIssues();
     console.log('BulkActions: Selected issues for bulk fix:', issuesToFix);
     
@@ -50,14 +51,10 @@ export const BulkActions: React.FC = () => {
     }, '*');
   };
 
-  const handleCheckLayers = () => {
-    parent.postMessage({
-      pluginMessage: { type: 'scan-layers' }
-    }, '*');
-  };
 
   return (
     <div className="bulk-actions">
+      
       <button 
         className="bulk-button"
         onClick={handleSelectAll}
@@ -65,20 +62,15 @@ export const BulkActions: React.FC = () => {
         {selectedCount === pendingCount ? 'Deselect all' : 'Select all'}
       </button>
       
-      <button 
-        className="bulk-button"
-        onClick={handleCheckLayers}
-      >
-        Check Layers
-      </button>
+      {selectedCount > 0 && (
+        <button 
+          className="bulk-button primary"
+          onClick={handleApplySelected}
+        >
+          Apply Selected ({selectedCount})
+        </button>
+      )}
       
-      <button 
-        className="bulk-button primary"
-        onClick={handleAutoFixAll}
-        disabled={selectedCount === 0}
-      >
-        Auto fix {selectedCount > 0 ? `${selectedCount}` : 'all'}
-      </button>
       
       <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#666' }}>
         {selectedCount} of {pendingCount} selected
