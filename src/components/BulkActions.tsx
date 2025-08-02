@@ -24,7 +24,12 @@ export const BulkActions: React.FC = () => {
 
   const handleAutoFixAll = () => {
     const issuesToFix = getSelectedIssues();
-    if (issuesToFix.length === 0) return;
+    console.log('BulkActions: Selected issues for bulk fix:', issuesToFix);
+    
+    if (issuesToFix.length === 0) {
+      console.log('BulkActions: No issues selected for bulk fix');
+      return;
+    }
 
     setProcessing(true);
     
@@ -32,9 +37,10 @@ export const BulkActions: React.FC = () => {
       layerId: issue.layerId,
       issueId: issue.id,
       suggestion: issue.suggestion,
-      position: issue.position,
-      originalText: issue.originalText
+      issueText: issue.issueText
     }));
+
+    console.log('BulkActions: Sending bulk fix message with fixes:', fixes);
 
     parent.postMessage({
       pluginMessage: {

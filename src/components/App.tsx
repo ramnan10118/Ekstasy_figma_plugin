@@ -23,9 +23,9 @@ export const App: React.FC = () => {
   
   console.log('UI: App component state:', { layers: layers.length, isScanning, isProcessing });
 
-  // OpenAI batch processing (original working implementation)
+  // OpenAI individual processing (more accurate than batch)
   const processTextLayersAsync = async (textLayers: any[]) => {
-    console.log('UI: Starting OpenAI batch processing for', textLayers.length, 'layers');
+    console.log('UI: Starting OpenAI individual processing for', textLayers.length, 'layers');
     setProcessing(true);
     
     try {
@@ -38,11 +38,11 @@ export const App: React.FC = () => {
         return;
       }
       
-      // Use the original OpenAI batch processing
-      console.log('UI: Calling OpenAI batch processor...');
+      // Use individual OpenAI processing for better accuracy
+      console.log('UI: Calling OpenAI individual processor...');
       const processedLayers = await checkTextLayersWithOpenAI(textLayers);
       
-      console.log('UI: OpenAI batch processing complete, processed layers:', processedLayers);
+      console.log('UI: OpenAI individual processing complete, processed layers:', processedLayers);
       setLayers(processedLayers);
       setScanning(false);
       setProcessing(false);
@@ -87,7 +87,26 @@ export const App: React.FC = () => {
           processTextLayersAsync(textLayers);
           break;
         case 'bulk-fix-complete':
+          console.log('UI: Bulk fix completed:', message.data);
           setProcessing(false);
+          
+          // Update status for successful fixes
+          if (message.data && message.data.successfulFixes) {
+            const { updateIssueStatus } = usePluginStore.getState();
+            message.data.successfulFixes.forEach((fix: any) => {
+              updateIssueStatus(fix.layerId, fix.issueId, 'accepted');
+            });
+          }
+          
+          // Show feedback to user
+          if (message.data) {
+            const { successCount, failCount, total } = message.data;
+            if (failCount > 0) {
+              console.warn(`UI: Bulk fix completed with ${failCount} failures out of ${total} total fixes`);
+            } else {
+              console.log(`UI: All ${successCount} fixes applied successfully`);
+            }
+          }
           break;
         case 'test-message':
           console.log('UI: Received test message:', message.data);
@@ -216,7 +235,7 @@ export const App: React.FC = () => {
       
       {isProcessing && (
         <div className="processing-overlay">
-          <LoadingState message="Checking grammar and spelling..." />
+          <LoadingState message="Analyzing each text individually for better accuracy..." />
         </div>
       )}
     </div>

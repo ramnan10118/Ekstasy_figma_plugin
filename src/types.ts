@@ -53,7 +53,8 @@ export interface ApplyBulkFixMessage extends PluginMessage {
     fixes: Array<{
       layerId: string;
       issueId: string;
-      newText: string;
+      suggestion: string;
+      issueText: string;
     }>;
   };
 }
