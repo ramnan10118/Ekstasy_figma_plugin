@@ -10,7 +10,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   const { 
     selectedIssues, 
     toggleIssueSelection, 
-    updateIssueStatus 
+    updateIssueStatus,
+    undoCorrection
   } = usePluginStore();
 
   const handleJumpToLayer = () => {
@@ -36,6 +37,24 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     }, '*');
   };
 
+  const handleUndo = () => {
+    const undoneIssue = undoCorrection(issue.layerId, issue.id);
+    if (undoneIssue) {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'undo-fix',
+          data: {
+            layerId: issue.layerId,
+            issueId: issue.id,
+            originalText: undoneIssue.originalText,
+            suggestion: undoneIssue.suggestion,
+            issueText: undoneIssue.issueText
+          }
+        }
+      }, '*');
+    }
+  };
+
 
   const isSelected = selectedIssues.includes(issue.id);
   const isPending = issue.status === 'pending';
@@ -51,8 +70,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             style={{ marginTop: '2px' }}
           />
         )}
-        
-        <div className={`issue-status ${issue.status === 'accepted' ? 'correct' : 'warning'}`} />
         
         <div className="issue-content">
           <div className={`issue-type ${issue.status === 'accepted' ? 'correct' : ''}`}>
@@ -82,7 +99,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             <button 
               className="bulk-button primary"
               onClick={handleApplyFix}
-              style={{ fontSize: '10px', padding: '4px 8px' }}
+              style={{ fontSize: '12px', padding: '8px 16px' }}
             >
               Apply Fix
             </button>
@@ -90,9 +107,30 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
           <button 
             className="bulk-button"
             onClick={handleJumpToLayer}
-            style={{ fontSize: '10px', padding: '4px 8px' }}
+            style={{ fontSize: '12px', padding: '8px 16px' }}
           >
-            Jump to Layer
+            Locate Layer
+          </button>
+        </div>
+      )}
+
+      {issue.status === 'accepted' && (
+        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              className="bulk-button"
+              onClick={handleUndo}
+              style={{ fontSize: '12px', padding: '8px 16px', background: '#f59e0b', color: 'white', border: 'none' }}
+            >
+              Undo
+            </button>
+          </div>
+          <button 
+            className="bulk-button"
+            onClick={handleJumpToLayer}
+            style={{ fontSize: '12px', padding: '8px 16px' }}
+          >
+            Locate Layer
           </button>
         </div>
       )}

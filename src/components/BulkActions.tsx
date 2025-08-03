@@ -25,10 +25,8 @@ export const BulkActions: React.FC = () => {
 
   const handleApplySelected = () => {
     const issuesToFix = getSelectedIssues();
-    console.log('BulkActions: Selected issues for bulk fix:', issuesToFix);
     
     if (issuesToFix.length === 0) {
-      console.log('BulkActions: No issues selected for bulk fix');
       return;
     }
 
@@ -40,8 +38,6 @@ export const BulkActions: React.FC = () => {
       suggestion: issue.suggestion,
       issueText: issue.issueText
     }));
-
-    console.log('BulkActions: Sending bulk fix message with fixes:', fixes);
 
     parent.postMessage({
       pluginMessage: {

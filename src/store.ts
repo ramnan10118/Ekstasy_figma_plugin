@@ -12,6 +12,7 @@ interface PluginStore extends PluginState {
   selectAllIssues: () => void;
   clearSelection: () => void;
   updateIssueStatus: (layerId: string, issueId: string, status: 'pending' | 'accepted' | 'dismissed') => void;
+  undoCorrection: (layerId: string, issueId: string) => TextIssue | null;
   getSelectedIssues: () => TextIssue[];
   getPendingIssuesCount: () => number;
   getAcceptedIssuesCount: () => number;
@@ -65,6 +66,30 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
         : layer
     )
   })),
+  
+  undoCorrection: (layerId, issueId) => {
+    const state = get();
+    const layer = state.layers.find(l => l.id === layerId);
+    const issue = layer?.issues.find(i => i.id === issueId && i.status === 'accepted');
+    
+    if (issue) {
+      // Change status back to pending
+      set((state) => ({
+        layers: state.layers.map(layer => 
+          layer.id === layerId 
+            ? {
+                ...layer,
+                issues: layer.issues.map(i =>
+                  i.id === issueId ? { ...i, status: 'pending' as const } : i
+                )
+              }
+            : layer
+        )
+      }));
+      return issue;
+    }
+    return null;
+  },
   
   getSelectedIssues: () => {
     const state = get();

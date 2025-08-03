@@ -42,15 +42,17 @@
 }
 
 .plugin-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
   margin: 0;
+  letter-spacing: -0.025em;
 }
 
 .issue-count {
-  font-size: 12px;
-  color: #666;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
 }
 
 .issues-indicator {
@@ -62,9 +64,9 @@
 .issues-count-red {
   background: #ef4444;
   color: white;
-  padding: 4px 8px;
+  padding: 6px 12px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   min-width: 60px;
   text-align: center;
@@ -93,11 +95,12 @@
 }
 
 .bulk-button {
-  padding: 6px 12px;
+  padding: 8px 16px;
   border: 1px solid #d1d5db;
   background: #ffffff;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -137,45 +140,19 @@
   margin-bottom: 8px;
 }
 
-.issue-status {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
-.issue-status.correct {
-  background: #10b981;
-}
-
-.issue-status.warning {
-  background: #ff6b35;
-}
-
-.issue-status::after {
-  content: "✓";
-  color: white;
-  font-size: 10px;
-  font-weight: bold;
-}
-
-.issue-status.warning::after {
-  content: "!";
-}
 
 .issue-content {
   flex: 1;
 }
 
 .issue-type {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #ff6b35;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .issue-type.correct {
@@ -183,10 +160,11 @@
 }
 
 .issue-text {
-  font-size: 12px;
-  color: #333;
-  line-height: 1.4;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
   margin-bottom: 8px;
+  font-weight: 400;
 }
 
 .issue-actions {
@@ -210,19 +188,22 @@
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
   border-radius: 6px;
-  padding: 8px;
+  padding: 12px;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .suggestion-label {
   color: #15803d;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  font-size: 12px;
 }
 
 .suggestion-text {
   color: #166534;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .loading-state,
@@ -248,9 +229,10 @@
 }
 
 .loading-state {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.5;
+  color: #1f2937;
 }
 
 .loading-text {

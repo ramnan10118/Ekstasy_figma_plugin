@@ -239,6 +239,32 @@ async function handleBulkFix(fixes: any[]) {
   });
 }
 
+// Undo fix handler
+async function handleUndoFix(layerId: string, issueId: string, originalText: string, suggestion: string, issueText: string) {
+  try {
+    // To undo: replace the suggestion back with the original issue text
+    const success = await applyTextFixAsync(layerId, issueText, suggestion);
+    
+    figma.ui.postMessage({
+      type: 'undo-complete',
+      data: { 
+        success,
+        layerId,
+        issueId
+      }
+    });
+  } catch (error) {
+    figma.ui.postMessage({
+      type: 'undo-complete',
+      data: { 
+        success: false,
+        layerId,
+        issueId
+      }
+    });
+  }
+}
+
 // Async version of text replacement function
 async function applyTextFixAsync(layerId: string, suggestion: string, issueText: string): Promise<boolean> {
   const node = figma.getNodeById(layerId);
@@ -315,13 +341,6 @@ async function applyTextFixAsync(layerId: string, suggestion: string, issueText:
   }
 }
 
-// Simple and reliable text replacement function (legacy)
-async function applyTextFix(layerId: string, suggestion: string, issueText: string) {
-  const success = await applyTextFixAsync(layerId, suggestion, issueText);
-  if (!success) {
-    console.error('Legacy text fix failed for layer:', layerId);
-  }
-}
 
 // Function to jump to a specific layer
 function jumpToLayer(layerId: string) {
@@ -375,15 +394,27 @@ figma.ui.onmessage = (message: PluginMessage) => {
       break;
       
     case 'jump-to-layer':
-      jumpToLayer(message.data.layerId);
+      if (message.data && message.data.layerId) {
+        jumpToLayer(message.data.layerId);
+      }
       break;
       
     case 'apply-fix':
-      handleSingleFix(message.data.layerId, message.data.issueId, message.data.suggestion, message.data.issueText);
+      if (message.data && message.data.layerId && message.data.issueId) {
+        handleSingleFix(message.data.layerId, message.data.issueId, message.data.suggestion, message.data.issueText);
+      }
       break;
       
     case 'apply-bulk-fix':
-      handleBulkFix(message.data.fixes);
+      if (message.data && message.data.fixes) {
+        handleBulkFix(message.data.fixes);
+      }
+      break;
+      
+    case 'undo-fix':
+      if (message.data && message.data.layerId && message.data.issueId) {
+        handleUndoFix(message.data.layerId, message.data.issueId, message.data.originalText, message.data.suggestion, message.data.issueText);
+      }
       break;
       
     case 'close':

@@ -141,6 +141,22 @@ export const App: React.FC = () => {
             }
           }
           break;
+        case 'undo-complete':
+          console.log('UI: Undo completed:', message.data);
+          
+          if (message.data) {
+            const { updateIssueStatus, clearSelection } = usePluginStore.getState();
+            if (message.data.success) {
+              // Issue is already set back to pending by the store undo function
+              console.log('UI: Undo applied successfully for issue:', message.data.issueId);
+              clearSelection();
+            } else {
+              // If undo failed, set status back to accepted
+              updateIssueStatus(message.data.layerId, message.data.issueId, 'accepted');
+              console.log('UI: Undo failed for issue:', message.data.issueId);
+            }
+          }
+          break;
         case 'test-message':
           console.log('UI: Received test message:', message.data);
           break;
@@ -190,17 +206,12 @@ export const App: React.FC = () => {
 
   if (layers.length === 0) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <div style={{ marginBottom: '16px' }}>
-          <h3>No text layers found</h3>
-          <p style={{ fontSize: '12px', color: '#666' }}>
-            Make sure you have:
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', margin: '0 0 12px 0' }}>No text layers found</h3>
+          <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
+            Make sure you have text layers in your Figma file
           </p>
-          <ul style={{ fontSize: '11px', color: '#666', textAlign: 'left' }}>
-            <li>Frames in your Figma file</li>
-            <li>Text layers inside those frames</li>
-            <li>Try selecting a frame with text</li>
-          </ul>
         </div>
         <button 
           onClick={() => {
@@ -210,49 +221,17 @@ export const App: React.FC = () => {
             }, '*');
           }}
           style={{
-            padding: '8px 16px',
+            padding: '12px 24px',
             background: '#3b82f6',
             color: 'white',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '6px',
             cursor: 'pointer',
-            marginRight: '8px'
+            fontSize: '14px',
+            fontWeight: '500'
           }}
         >
           Rescan
-        </button>
-        <button 
-          onClick={() => {
-            console.log('UI: Test button clicked - adding mock data');
-            setLayers([{
-              id: 'test-1',
-              name: 'Test Layer',
-              text: 'Test text with errors',
-              frameName: 'Test Frame',
-              issues: [{
-                id: 'test-issue-1',
-                originalText: 'Test text with errors',
-                issueText: 'errors',
-                suggestion: 'mistakes',
-                type: 'grammar' as const,
-                confidence: 0.9,
-                position: { start: 0, end: 5 },
-                layerId: 'test-1',
-                layerName: 'Test Layer',
-                status: 'pending' as const
-              }]
-            }]);
-          }}
-          style={{
-            padding: '8px 16px',
-            background: '#f59e0b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Test UI
         </button>
       </div>
     );
