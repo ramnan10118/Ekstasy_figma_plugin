@@ -20,14 +20,16 @@ export const App: React.FC = () => {
     setProcessing,
     setScanProgress,
     setProcessingProgress,
-    getPendingIssuesCount
+    getPendingIssuesCount,
+    initializeLayersForStreaming,
+    addIssuesForLayer
   } = usePluginStore();
   
   console.log('UI: App component state:', { layers: layers.length, isScanning, isProcessing });
 
-  // AI parallel processing (fast + accurate)
+  // AI parallel processing with STREAMING (fast + accurate)
   const processTextLayersAsync = async (textLayers: any[]) => {
-    console.log('UI: Starting OpenAI parallel processing for', textLayers.length, 'layers');
+    console.log('UI: Starting OpenAI STREAMING processing for', textLayers.length, 'layers');
     setProcessing(true);
     setProcessingProgress({ completed: 0, total: textLayers.length });
     
@@ -41,20 +43,35 @@ export const App: React.FC = () => {
         return;
       }
       
-      // Use parallel AI processing for speed + accuracy with progress tracking
-      console.log('UI: Calling OpenAI parallel processor...');
-      const processedLayers = await checkTextLayersWithOpenAI(textLayers, (completed, total) => {
-        setProcessingProgress({ completed, total });
-      });
+      // 🚀 STREAMING: Initialize layers for progressive results
+      console.log('UI: Initializing layers for streaming...');
+      initializeLayersForStreaming(textLayers);
       
-      console.log('UI: OpenAI parallel processing complete, processed layers:', processedLayers);
+      // Use parallel AI processing with STREAMING callback
+      console.log('UI: Calling OpenAI processor with streaming...');
+      const processedLayers = await checkTextLayersWithOpenAI(
+        textLayers, 
+        // Progress callback
+        (completed, total) => {
+          setProcessingProgress({ completed, total });
+        },
+        // 🔥 NEW: Streaming results callback
+        (layerId, issues) => {
+          console.log(`🔄 UI STREAMING: Received ${issues.length} issues for layer ${layerId}`);
+          addIssuesForLayer(layerId, issues);
+        }
+      );
+      
+      console.log('UI: OpenAI streaming processing complete');
+      
+      // Fallback: Ensure all results are set (in case streaming missed anything)
       setLayers(processedLayers);
       setScanning(false);
       setProcessing(false);
-      console.log('UI: Set layers and stopped scanning/processing');
+      console.log('UI: Streaming complete - stopped processing');
       
     } catch (error) {
-      console.error('UI: OpenAI processing failed:', error);
+      console.error('UI: OpenAI streaming processing failed:', error);
       setScanning(false);
       setProcessing(false);
     }

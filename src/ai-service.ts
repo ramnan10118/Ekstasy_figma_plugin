@@ -105,8 +105,8 @@ IMPORTANT:
           return false;
         }
         
-        const suggestion = issue.suggestion?.toLowerCase() || '';
-        const issueText = issue.issueText?.toLowerCase() || '';
+        const suggestion = issue.suggestion || '';
+        const issueText = issue.issueText || '';
         
         // Skip invalid suggestions
         if (suggestion.includes('(mock correction)') || 
