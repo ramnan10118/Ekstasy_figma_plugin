@@ -1,4 +1,6 @@
 import { TextIssue, TextLayer } from './types';
+import { TextNormalizer, NormalizedText } from './text-normalizer';
+import { grammarCache, CacheEntry } from './cache-manager';
 
 // Individual text processing for more accurate results
 export async function checkSingleTextWithOpenAI(textLayer: TextLayer): Promise<TextLayer> {
@@ -11,12 +13,13 @@ export async function checkSingleTextWithOpenAI(textLayer: TextLayer): Promise<T
     console.log(`Processing individual text: "${textLayer.text}" (${textLayer.name})`);
 
     // Create focused system prompt for individual text analysis
-    const systemPrompt = `You are a professional grammar and spell checker. Analyze the following single text for ALL grammar and spelling errors.
+    const systemPrompt = `You are a professional grammar and spell checker. Analyze the following single text for ALL grammar, spelling, and punctuation errors.
 
 CRITICAL REQUIREMENTS:
 - Find EVERY spelling mistake, no matter how obvious (e.g., "Dsh" should be "Dash", "chking" should be "checking")
 - Find EVERY grammar error (subject-verb agreement, tense errors, etc.)
-- DO NOT flag style issues - only real grammar and spelling mistakes
+- Find EVERY punctuation error (missing commas, periods, apostrophes, capitalization)
+- DO NOT flag style issues - only real grammar, spelling, and punctuation mistakes
 - Even simple typos MUST be detected and reported
 - Be thorough and consistent
 
@@ -27,7 +30,7 @@ Return valid JSON in this exact format:
       "originalText": "full original text",
       "issueText": "the problematic word/phrase",
       "suggestion": "corrected version",
-      "type": "grammar|spelling", 
+      "type": "grammar|spelling|punctuation", 
       "confidence": 0.9,
       "position": {
         "start": 0,
@@ -43,7 +46,7 @@ IMPORTANT:
 - Be precise with character positions (0-indexed)
 - Suggestions must be real words, not placeholders`;
 
-    const userPrompt = `Analyze this text for grammar and spelling errors: "${textLayer.text}"`;
+    const userPrompt = `Analyze this text for grammar, spelling, and punctuation errors: "${textLayer.text}"`;
 
     const messages: OpenAIMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -173,7 +176,7 @@ interface OpenAIGrammarResult {
 
 
 
-// Main OpenAI processing function
+// Main OpenAI processing function with caching and deduplication
 export async function checkTextLayersWithOpenAI(
   textLayers: TextLayer[], 
   onProgress?: (completed: number, total: number) => void
@@ -184,97 +187,169 @@ export async function checkTextLayersWithOpenAI(
       return textLayers;
     }
 
-    // Configuration for parallel processing
-    const CONCURRENT_REQUESTS = 4; // Process 4 texts simultaneously
-    const DELAY_BETWEEN_BATCHES = 200; // 200ms delay between batches to respect rate limits
-
-    console.log('Starting OpenAI PARALLEL processing for', textLayers.length, 'layers');
-    console.log(`Using ${CONCURRENT_REQUESTS} concurrent requests`);
+    console.log('Starting OpenAI processing with CACHING for', textLayers.length, 'layers');
 
     // Filter layers that have valid text content
-    const validLayers = textLayers.filter(layer => layer.text && layer.text.trim());
+    const validLayers = textLayers.filter(layer => 
+      layer.text && layer.text.trim() && TextNormalizer.isValidForChecking(layer.text)
+    );
     
     if (validLayers.length === 0) {
       console.log('No valid text content to process');
       return textLayers;
     }
 
-    console.log(`Processing ${validLayers.length} text layers in parallel batches...`);
+    // Group layers by normalized text to eliminate duplicates
+    const normalizedGroups = TextNormalizer.groupLayersByNormalizedText(
+      validLayers.map(layer => ({ id: layer.id, text: layer.text }))
+    );
+
+    console.log(`🔄 DEDUPLICATION: Grouped ${validLayers.length} layers into ${normalizedGroups.size} unique texts`);
+    console.log(`📊 DEDUPLICATION RATIO: ${((validLayers.length - normalizedGroups.size) / validLayers.length * 100).toFixed(1)}%`);
     
-    // Split layers into batches for parallel processing
-    const batches: TextLayer[][] = [];
-    for (let i = 0; i < validLayers.length; i += CONCURRENT_REQUESTS) {
-      batches.push(validLayers.slice(i, i + CONCURRENT_REQUESTS));
+    // Debug: Show some examples of grouping
+    let groupCount = 0;
+    for (const [normalizedText, group] of normalizedGroups) {
+      if (group.layerIds.length > 1 && groupCount < 5) {
+        console.log(`🔗 GROUPED: "${normalizedText}" appears in ${group.layerIds.length} layers`);
+        groupCount++;
+      }
     }
 
-    console.log(`Created ${batches.length} batches of ${CONCURRENT_REQUESTS} texts each`);
+    // Check cache for each normalized text
+    const cacheResults = new Map<string, CacheEntry>();
+    const textsToProcess: NormalizedText[] = [];
     
-    const processedLayers: TextLayer[] = [];
-    let totalProcessed = 0;
-    
-    // Process batches sequentially, but texts within each batch in parallel
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-      const batch = batches[batchIndex];
-      console.log(`\n=== Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} texts) ===`);
+    for (const [normalizedText, group] of normalizedGroups) {
+      grammarCache.mapLayersToNormalizedText(normalizedText, group.layerIds);
       
-      try {
-        // Process all texts in this batch simultaneously
-        const batchPromises = batch.map(async (layer, indexInBatch) => {
+      const cachedEntry = grammarCache.getCachedResult(normalizedText);
+      
+      if (cachedEntry && cachedEntry.status === 'HIT') {
+        console.log(`🎯 CACHE HIT: "${normalizedText}" (${group.layerIds.length} layers)`);
+        cacheResults.set(normalizedText, cachedEntry);
+      } else {
+        if (cachedEntry && cachedEntry.status === 'STALE') {
+          console.log(`⚠️  CACHE STALE: "${normalizedText}" - will refresh`);
+        } else {
+          console.log(`🔍 CACHE MISS: "${normalizedText}" - will process`);
+        }
+        textsToProcess.push(group);
+      }
+    }
+
+    const processedResults = new Map<string, TextIssue[]>();
+    
+    // Process only unique texts that need API calls
+    if (textsToProcess.length > 0) {
+      console.log(`\n=== Processing ${textsToProcess.length} unique texts via OpenAI ===`);
+      
+      // Configuration for parallel processing
+      const CONCURRENT_REQUESTS = 4;
+      const DELAY_BETWEEN_BATCHES = 200;
+      
+      // Split unique texts into batches for parallel processing
+      const batches: NormalizedText[][] = [];
+      for (let i = 0; i < textsToProcess.length; i += CONCURRENT_REQUESTS) {
+        batches.push(textsToProcess.slice(i, i + CONCURRENT_REQUESTS));
+      }
+      
+      let totalProcessed = 0;
+      
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`\nBatch ${batchIndex + 1}/${batches.length} (${batch.length} unique texts)`);
+        
+        const batchPromises = batch.map(async (group, indexInBatch) => {
           const globalIndex = totalProcessed + indexInBatch + 1;
-          console.log(`🔄 Starting ${globalIndex}/${validLayers.length}: "${layer.text}" (${layer.name})`);
+          console.log(`🔄 Processing ${globalIndex}/${textsToProcess.length}: "${group.normalized}" (affects ${group.layerIds.length} layers)`);
           
           try {
-            const processedLayer = await checkSingleTextWithOpenAI(layer);
-            console.log(`✅ Completed ${globalIndex}/${validLayers.length}: Found ${processedLayer.issues.length} issues`);
-            return processedLayer;
+            // Create a temporary layer for processing
+            const tempLayer: TextLayer = {
+              id: group.layerIds[0], // Use first layer ID as reference
+              name: `temp-${group.layerIds[0]}`,
+              text: group.original,
+              issues: []
+            };
+            
+            const processedLayer = await checkSingleTextWithOpenAI(tempLayer);
+            
+            // Cache the result
+            grammarCache.setCachedResult(group.normalized, processedLayer.issues);
+            console.log(`✅ Completed ${globalIndex}/${textsToProcess.length}: Found ${processedLayer.issues.length} issues, cached for reuse`);
+            
+            return { normalizedText: group.normalized, result: processedLayer.issues };
           } catch (error) {
-            console.error(`❌ Failed ${globalIndex}/${validLayers.length}:`, error);
-            return { ...layer, issues: [] };
+            console.error(`❌ Failed ${globalIndex}/${textsToProcess.length}:`, error);
+            return { normalizedText: group.normalized, result: [] };
           }
         });
-
-        // Wait for all texts in this batch to complete
-        const batchResults = await Promise.all(batchPromises);
-        processedLayers.push(...batchResults);
-        totalProcessed += batch.length;
-
-        console.log(`✓ Batch ${batchIndex + 1}/${batches.length} complete (${totalProcessed}/${validLayers.length} total)`);
         
-        // Send progress update
+        const batchResults = await Promise.all(batchPromises);
+        batchResults.forEach(({ normalizedText, result }) => {
+          processedResults.set(normalizedText, result);
+        });
+        
+        totalProcessed += batch.length;
+        
         if (onProgress) {
-          onProgress(totalProcessed, validLayers.length);
+          const totalExpected = normalizedGroups.size;
+          const completed = cacheResults.size + totalProcessed;
+          onProgress(completed, totalExpected);
         }
         
-        // Delay between batches to respect rate limits (except for the last batch)
         if (batchIndex < batches.length - 1) {
           console.log(`⏳ Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch...`);
           await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
         }
-        
-      } catch (error) {
-        console.error(`❌ Batch ${batchIndex + 1} failed:`, error);
-        // Add failed layers with empty issues
-        batch.forEach(layer => processedLayers.push({ ...layer, issues: [] }));
-        totalProcessed += batch.length;
       }
     }
 
-    // Merge processed layers back with original layers (maintaining order)
+    // Map results back to all layers
     const finalLayers = textLayers.map(originalLayer => {
-      const processedLayer = processedLayers.find(p => p.id === originalLayer.id);
-      return processedLayer || { ...originalLayer, issues: [] };
+      if (!originalLayer.text || !originalLayer.text.trim() || !TextNormalizer.isValidForChecking(originalLayer.text)) {
+        return { ...originalLayer, issues: [] };
+      }
+      
+      const normalizedText = TextNormalizer.normalize(originalLayer.text);
+      
+      // Get result from cache or processed results
+      let rawResult: TextIssue[] = [];
+      const cachedEntry = cacheResults.get(normalizedText);
+      if (cachedEntry) {
+        rawResult = cachedEntry.result;
+      } else {
+        rawResult = processedResults.get(normalizedText) || [];
+      }
+      
+      // Map issues to this specific layer
+      const issues: TextIssue[] = rawResult.map((issue, index) => ({
+        ...issue,
+        id: `${originalLayer.id}-${index}`,
+        layerId: originalLayer.id,
+        layerName: originalLayer.name
+      }));
+      
+      return { ...originalLayer, issues };
     });
 
-    console.log('\n=== PARALLEL PROCESSING COMPLETE ===');
-    console.log(`Processed ${processedLayers.length} layers with ${CONCURRENT_REQUESTS} concurrent requests`);
+    // Log final statistics
+    console.log('\n=== CACHED PROCESSING COMPLETE ===');
+    grammarCache.logCacheStats();
     
+    const uniqueTextsProcessed = textsToProcess.length;
+    const totalTextsDeduped = validLayers.length - uniqueTextsProcessed;
     const totalIssues = finalLayers.reduce((sum, layer) => sum + layer.issues.length, 0);
-    console.log(`Total issues found: ${totalIssues}`);
+    
+    console.log(`Processed ${uniqueTextsProcessed} unique texts via OpenAI`);
+    console.log(`Reused ${totalTextsDeduped} results from deduplication/cache`);
+    console.log(`Total issues found: ${totalIssues} across ${finalLayers.length} layers`);
     
     return finalLayers;
 
   } catch (error) {
-    console.error('OpenAI parallel processing failed:', error);
+    console.error('Cached OpenAI processing failed:', error);
     return textLayers.map(layer => ({ ...layer, issues: [] }));
   }
 }
