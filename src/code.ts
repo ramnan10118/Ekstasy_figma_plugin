@@ -380,16 +380,141 @@ function scanTextLayers() {
   });
 }
 
+// Frame selection mode functions
+function startFrameSelectionMode() {
+  console.log('Starting frame selection mode');
+  
+  // Add selection change listener
+  figma.on('selectionchange', () => {
+    const selection = figma.currentPage.selection;
+    const frames = selection.filter(node => node.type === 'FRAME');
+    
+    console.log('Selection changed:', frames.length, 'frames selected');
+    
+    // Send frame selection to UI
+    figma.ui.postMessage({
+      type: 'selection-update',
+      data: {
+        frames: frames.map(frame => ({
+          id: frame.id,
+          name: frame.name
+        }))
+      }
+    });
+  });
+  
+  figma.notify('Select frames to scan using your mouse');
+}
+
+function exitFrameSelectionMode() {
+  console.log('Exiting frame selection mode - removing listeners');
+  // Remove the selection change listener by setting a new empty one
+  figma.off('selectionchange');
+}
+
+function scanSelectedFrames(frameIds: string[]) {
+  console.log('Scanning selected frames:', frameIds);
+  
+  figma.ui.postMessage({
+    type: 'scan-started'
+  });
+
+  const frameCountCounts: Record<string, number> = {};
+  let totalTextCount = 0;
+
+  // Extract text layers only from selected frames
+  const textLayers: TextLayer[] = [];
+  
+  for (const frameId of frameIds) {
+    const frameNode = figma.getNodeById(frameId);
+    if (frameNode && frameNode.type === 'FRAME') {
+      console.log(`Scanning frame: ${frameNode.name}`);
+      
+      // Extract text layers from this specific frame
+      const frameTextLayers = extractTextLayersFromNode(frameNode, frameNode.name);
+      textLayers.push(...frameTextLayers);
+      
+      frameCountCounts[frameNode.name] = frameTextLayers.length;
+      totalTextCount += frameTextLayers.length;
+    }
+  }
+
+  // Send progress update
+  figma.ui.postMessage({
+    type: 'scan-progress',
+    data: {
+      textCount: totalTextCount,
+      frameCount: Object.keys(frameCountCounts).length
+    }
+  });
+
+  console.log('Found text layers in selected frames:', textLayers);
+  
+  // Send text layers to UI for AI processing
+  console.log('Sending process-text-layers message to UI...');
+  figma.ui.postMessage({
+    type: 'process-text-layers',
+    data: { layers: textLayers }
+  });
+}
+
+// Extract text layers from a specific node (frame)
+function extractTextLayersFromNode(node: SceneNode, containerName: string): TextLayer[] {
+  const textLayers: TextLayer[] = [];
+  
+  function traverseNode(currentNode: SceneNode, depth: number = 0) {
+    if (currentNode.type === 'TEXT') {
+      const textNode = currentNode as TextNode;
+      if (textNode.characters && textNode.characters.trim()) {
+        textLayers.push({
+          id: textNode.id,
+          name: textNode.name,
+          text: textNode.characters,
+          issues: [],
+          containerName: containerName
+        });
+      }
+    }
+    
+    // Recursively check children if node has them
+    if ('children' in currentNode) {
+      currentNode.children.forEach(child => traverseNode(child, depth + 1));
+    }
+  }
+  
+  traverseNode(node);
+  return textLayers;
+}
+
 // Handle messages from the UI
 figma.ui.onmessage = (message: PluginMessage) => {
   console.log('Main: Received message from UI:', message.type);
   
   switch (message.type) {
     case 'ui-ready':
-      console.log('Main: UI is ready, starting initial scan');
+      console.log('Main: UI is ready, waiting for user to select scan type');
+      // No auto-scan - user must choose scan type
+      break;
+    case 'start-full-scan':
+      console.log('Main: Starting full document scan');
       scanTextLayers();
       break;
+    case 'enter-frame-selection':
+      console.log('Main: Entering frame selection mode');
+      startFrameSelectionMode();
+      break;
+    case 'scan-selected-frames':
+      console.log('Main: Scanning selected frames:', message.data);
+      if (message.data && message.data.frameIds) {
+        scanSelectedFrames(message.data.frameIds);
+      }
+      break;
+    case 'exit-frame-selection':
+      console.log('Main: Exiting frame selection mode');
+      exitFrameSelectionMode();
+      break;
     case 'scan-layers':
+      // Legacy support - treat as full scan
       scanTextLayers();
       break;
       

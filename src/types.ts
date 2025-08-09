@@ -31,6 +31,32 @@ export interface ScanLayersMessage extends PluginMessage {
   type: 'scan-layers';
 }
 
+export interface StartFullScanMessage extends PluginMessage {
+  type: 'start-full-scan';
+}
+
+export interface EnterFrameSelectionMessage extends PluginMessage {
+  type: 'enter-frame-selection';
+}
+
+export interface ExitFrameSelectionMessage extends PluginMessage {
+  type: 'exit-frame-selection';
+}
+
+export interface ScanSelectedFramesMessage extends PluginMessage {
+  type: 'scan-selected-frames';
+  data: {
+    frameIds: string[];
+  };
+}
+
+export interface SelectionUpdateMessage extends PluginMessage {
+  type: 'selection-update';
+  data: {
+    frames: SelectedFrame[];
+  };
+}
+
 export interface JumpToLayerMessage extends PluginMessage {
   type: 'jump-to-layer';
   data: {
@@ -83,6 +109,14 @@ export interface ProcessingProgress {
   total: number;
 }
 
+export type ScanMode = 'none' | 'full-document' | 'frame-selection';
+export type PreviousRoute = 'frame-selection' | 'full-document' | null;
+
+export interface SelectedFrame {
+  id: string;
+  name: string;
+}
+
 export interface PluginState {
   layers: TextLayer[];
   isScanning: boolean;
@@ -91,4 +125,7 @@ export interface PluginState {
   selectedIssues: string[];
   scanProgress: ScanProgress;
   processingProgress: ProcessingProgress;
+  scanMode: ScanMode;
+  selectedFrames: SelectedFrame[];
+  previousRoute: PreviousRoute;
 }

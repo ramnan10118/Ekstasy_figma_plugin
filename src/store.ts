@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { TextLayer, TextIssue, PluginState, ScanProgress, ProcessingProgress } from './types';
+import { TextLayer, TextIssue, PluginState, ScanProgress, ProcessingProgress, ScanMode, SelectedFrame, PreviousRoute } from './types';
 
 interface PluginStore extends PluginState {
   setLayers: (layers: TextLayer[]) => void;
@@ -8,6 +8,9 @@ interface PluginStore extends PluginState {
   setViewMode: (mode: 'by-layer' | 'by-text') => void;
   setScanProgress: (progress: ScanProgress) => void;
   setProcessingProgress: (progress: ProcessingProgress) => void;
+  setScanMode: (mode: ScanMode) => void;
+  setSelectedFrames: (frames: SelectedFrame[]) => void;
+  setPreviousRoute: (route: PreviousRoute) => void;
   addIssuesForLayer: (layerId: string, issues: TextIssue[]) => void;
   initializeLayersForStreaming: (layers: TextLayer[]) => void;
   toggleIssueSelection: (issueId: string) => void;
@@ -28,12 +31,21 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
   selectedIssues: [],
   scanProgress: { textCount: 0, frameCount: 0 },
   processingProgress: { completed: 0, total: 0 },
+  scanMode: 'none',
+  selectedFrames: [],
+  previousRoute: null,
 
   setLayers: (layers) => set({ layers }),
   
   setScanning: (isScanning) => set({ isScanning }),
   
   setProcessing: (isProcessing) => set({ isProcessing }),
+  
+  setScanMode: (scanMode) => set({ scanMode }),
+  
+  setSelectedFrames: (selectedFrames) => set({ selectedFrames }),
+  
+  setPreviousRoute: (previousRoute) => set({ previousRoute }),
   
   setViewMode: (viewMode) => set({ viewMode }),
   

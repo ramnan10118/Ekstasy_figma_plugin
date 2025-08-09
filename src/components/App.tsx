@@ -5,6 +5,8 @@ import { IssuesList } from './IssuesList';
 import { LoadingState } from './LoadingState';
 import { EmptyState } from './EmptyState';
 import { BulkActions } from './BulkActions';
+import { ScanTypeSelection } from './ScanTypeSelection';
+import { FrameSelection } from './FrameSelection';
 import { checkTextLayersWithOpenAI } from '../ai-service';
 import './App.css';
 
@@ -15,11 +17,16 @@ export const App: React.FC = () => {
     layers, 
     isScanning, 
     isProcessing, 
+    scanMode,
+    selectedFrames,
     setLayers, 
     setScanning,
     setProcessing,
     setScanProgress,
     setProcessingProgress,
+    setScanMode,
+    setSelectedFrames,
+    setPreviousRoute,
     getPendingIssuesCount,
     initializeLayersForStreaming,
     addIssuesForLayer
@@ -174,6 +181,12 @@ export const App: React.FC = () => {
             }
           }
           break;
+        case 'selection-update':
+          console.log('UI: Frame selection update:', message.data);
+          if (message.data && message.data.frames) {
+            setSelectedFrames(message.data.frames);
+          }
+          break;
         case 'test-message':
           console.log('UI: Received test message:', message.data);
           break;
@@ -213,6 +226,54 @@ export const App: React.FC = () => {
   console.log('App render - isScanning:', isScanning);
   console.log('App render - isProcessing:', isProcessing);
 
+  // Handle scan mode selection screen
+  if (scanMode === 'none') {
+    return (
+      <ScanTypeSelection
+        onSelectFullDocument={() => {
+          console.log('UI: Selected full document scan');
+          setScanMode('full-document');
+          setPreviousRoute('full-document');
+          parent.postMessage({
+            pluginMessage: { type: 'start-full-scan' }
+          }, '*');
+        }}
+        onSelectFrameSelection={() => {
+          console.log('UI: Selected frame selection mode');
+          setScanMode('frame-selection');
+          setPreviousRoute('frame-selection');
+          parent.postMessage({
+            pluginMessage: { type: 'enter-frame-selection' }
+          }, '*');
+        }}
+      />
+    );
+  }
+
+  // Handle frame selection screen
+  if (scanMode === 'frame-selection') {
+    return (
+      <FrameSelection
+        selectedFrames={selectedFrames}
+        onScanFrames={() => {
+          console.log('UI: Scanning selected frames:', selectedFrames);
+          setScanMode('full-document'); // Transition to scanning mode
+          parent.postMessage({
+            pluginMessage: { 
+              type: 'scan-selected-frames',
+              data: { frameIds: selectedFrames.map(f => f.id) }
+            }
+          }, '*');
+        }}
+        onBackToSelection={() => {
+          console.log('UI: Back to scan type selection');
+          setScanMode('none');
+          setSelectedFrames([]);
+        }}
+      />
+    );
+  }
+
   if (isScanning) {
     return <LoadingState type="scanning" />;
   }
@@ -232,10 +293,9 @@ export const App: React.FC = () => {
         </div>
         <button 
           onClick={() => {
-            console.log('UI: Manual rescan button clicked');
-            parent.postMessage({
-              pluginMessage: { type: 'scan-layers' }
-            }, '*');
+            console.log('UI: Manual rescan - back to selection');
+            setScanMode('none');
+            setLayers([]);
           }}
           style={{
             padding: '12px 24px',
@@ -248,7 +308,7 @@ export const App: React.FC = () => {
             fontWeight: '500'
           }}
         >
-          Rescan
+          Back to Scan Selection
         </button>
       </div>
     );
