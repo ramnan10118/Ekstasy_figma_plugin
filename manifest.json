@@ -12,9 +12,9 @@
   "documentAccess": "dynamic",
   "networkAccess": {
     "allowedDomains": [
-      "https://api.openai.com"
+      "https://your-vercel-app.vercel.app"
     ],
-    "reasoning": "This plugin needs to connect to OpenAI's API for AI-powered text analysis."
+    "reasoning": "This plugin connects to our secure backend for AI-powered text analysis."
   },
   "permissions": [
     "currentuser"

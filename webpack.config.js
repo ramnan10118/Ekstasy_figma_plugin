@@ -1,8 +1,6 @@
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const HtmlInlineScriptPlugin = require('html-inline-script-webpack-plugin');
-const webpack = require('webpack');
 const path = require('path');
-require('dotenv').config();
 
 module.exports = (env, argv) => ({
   mode: argv.mode === 'production' ? 'production' : 'development',
@@ -48,9 +46,6 @@ module.exports = (env, argv) => ({
       chunks: ['ui'],
       inject: 'body'
     }),
-    new HtmlInlineScriptPlugin(),
-    new webpack.DefinePlugin({
-      'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY)
-    })
+    new HtmlInlineScriptPlugin()
   ],
 });

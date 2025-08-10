@@ -176,7 +176,7 @@ interface OpenAIGrammarResult {
 
 
 
-// Main OpenAI processing function with caching and deduplication
+// Main backend processing function with caching and deduplication
 export async function checkTextLayersWithOpenAI(
   textLayers: TextLayer[], 
   onProgress?: (completed: number, total: number) => void
@@ -187,7 +187,7 @@ export async function checkTextLayersWithOpenAI(
       return textLayers;
     }
 
-    console.log('Starting OpenAI processing with CACHING for', textLayers.length, 'layers');
+    console.log('Starting BACKEND processing with CACHING for', textLayers.length, 'layers');
 
     // Filter layers that have valid text content
     const validLayers = textLayers.filter(layer => 
@@ -207,15 +207,6 @@ export async function checkTextLayersWithOpenAI(
     console.log(`🔄 DEDUPLICATION: Grouped ${validLayers.length} layers into ${normalizedGroups.size} unique texts`);
     console.log(`📊 DEDUPLICATION RATIO: ${((validLayers.length - normalizedGroups.size) / validLayers.length * 100).toFixed(1)}%`);
     
-    // Debug: Show some examples of grouping
-    let groupCount = 0;
-    for (const [normalizedText, group] of normalizedGroups) {
-      if (group.layerIds.length > 1 && groupCount < 5) {
-        console.log(`🔗 GROUPED: "${normalizedText}" appears in ${group.layerIds.length} layers`);
-        groupCount++;
-      }
-    }
-
     // Check cache for each normalized text
     const cacheResults = new Map<string, CacheEntry>();
     const textsToProcess: NormalizedText[] = [];
@@ -238,71 +229,59 @@ export async function checkTextLayersWithOpenAI(
       }
     }
 
-    const processedResults = new Map<string, TextIssue[]>();
-    
-    // Process only unique texts that need API calls
+    // Process texts that need API calls via backend
     if (textsToProcess.length > 0) {
-      console.log(`\n=== Processing ${textsToProcess.length} unique texts via OpenAI ===`);
+      console.log(`\n=== Processing ${textsToProcess.length} unique texts via BACKEND ===`);
       
-      // Configuration for parallel processing
-      const CONCURRENT_REQUESTS = 4;
-      const DELAY_BETWEEN_BATCHES = 200;
-      
-      // Split unique texts into batches for parallel processing
-      const batches: NormalizedText[][] = [];
-      for (let i = 0; i < textsToProcess.length; i += CONCURRENT_REQUESTS) {
-        batches.push(textsToProcess.slice(i, i + CONCURRENT_REQUESTS));
-      }
-      
-      let totalProcessed = 0;
-      
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        console.log(`\nBatch ${batchIndex + 1}/${batches.length} (${batch.length} unique texts)`);
-        
-        const batchPromises = batch.map(async (group, indexInBatch) => {
-          const globalIndex = totalProcessed + indexInBatch + 1;
-          console.log(`🔄 Processing ${globalIndex}/${textsToProcess.length}: "${group.normalized}" (affects ${group.layerIds.length} layers)`);
-          
-          try {
-            // Create a temporary layer for processing
-            const tempLayer: TextLayer = {
-              id: group.layerIds[0], // Use first layer ID as reference
-              name: `temp-${group.layerIds[0]}`,
-              text: group.original,
-              issues: []
-            };
-            
-            const processedLayer = await checkSingleTextWithOpenAI(tempLayer);
-            
-            // Cache the result
-            grammarCache.setCachedResult(group.normalized, processedLayer.issues);
-            console.log(`✅ Completed ${globalIndex}/${textsToProcess.length}: Found ${processedLayer.issues.length} issues, cached for reuse`);
-            
-            return { normalizedText: group.normalized, result: processedLayer.issues };
-          } catch (error) {
-            console.error(`❌ Failed ${globalIndex}/${textsToProcess.length}:`, error);
-            return { normalizedText: group.normalized, result: [] };
+      // Create layers for backend processing
+      const layersForBackend = textsToProcess.map(group => ({
+        id: group.layerIds[0],
+        name: `temp-${group.layerIds[0]}`,
+        text: group.original,
+        issues: []
+      }));
+
+      // Call secure backend instead of OpenAI directly
+      const response = await fetch('https://your-vercel-app.vercel.app/api/grammar-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          textLayers: layersForBackend,
+          batchConfig: {
+            concurrency: 4,
+            delay: 200
           }
-        });
-        
-        const batchResults = await Promise.all(batchPromises);
-        batchResults.forEach(({ normalizedText, result }) => {
-          processedResults.set(normalizedText, result);
-        });
-        
-        totalProcessed += batch.length;
-        
-        if (onProgress) {
-          const totalExpected = normalizedGroups.size;
-          const completed = cacheResults.size + totalProcessed;
-          onProgress(completed, totalExpected);
-        }
-        
-        if (batchIndex < batches.length - 1) {
-          console.log(`⏳ Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch...`);
-          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-        }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend API error:', response.status, errorText);
+        throw new Error(`Backend API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Backend processing failed');
+      }
+
+      console.log('Backend processing complete:', result.stats);
+
+      // Cache the results
+      result.data.forEach((processedLayer: TextLayer, index: number) => {
+        const group = textsToProcess[index];
+        grammarCache.setCachedResult(group.normalized, processedLayer.issues);
+        console.log(`✅ Cached result for "${group.normalized}": ${processedLayer.issues.length} issues`);
+      });
+
+      // Update progress
+      if (onProgress) {
+        const totalExpected = normalizedGroups.size;
+        const completed = cacheResults.size + textsToProcess.length;
+        onProgress(completed, totalExpected);
       }
     }
 
@@ -314,14 +293,9 @@ export async function checkTextLayersWithOpenAI(
       
       const normalizedText = TextNormalizer.normalize(originalLayer.text);
       
-      // Get result from cache or processed results
-      let rawResult: TextIssue[] = [];
-      const cachedEntry = cacheResults.get(normalizedText);
-      if (cachedEntry) {
-        rawResult = cachedEntry.result;
-      } else {
-        rawResult = processedResults.get(normalizedText) || [];
-      }
+      // Get result from cache (which now includes backend results)
+      const cachedEntry = grammarCache.getCachedResult(normalizedText);
+      const rawResult: TextIssue[] = cachedEntry?.result || [];
       
       // Map issues to this specific layer
       const issues: TextIssue[] = rawResult.map((issue, index) => ({
@@ -335,21 +309,16 @@ export async function checkTextLayersWithOpenAI(
     });
 
     // Log final statistics
-    console.log('\n=== CACHED PROCESSING COMPLETE ===');
+    console.log('\n=== BACKEND PROCESSING COMPLETE ===');
     grammarCache.logCacheStats();
     
-    const uniqueTextsProcessed = textsToProcess.length;
-    const totalTextsDeduped = validLayers.length - uniqueTextsProcessed;
     const totalIssues = finalLayers.reduce((sum, layer) => sum + layer.issues.length, 0);
-    
-    console.log(`Processed ${uniqueTextsProcessed} unique texts via OpenAI`);
-    console.log(`Reused ${totalTextsDeduped} results from deduplication/cache`);
     console.log(`Total issues found: ${totalIssues} across ${finalLayers.length} layers`);
     
     return finalLayers;
 
   } catch (error) {
-    console.error('Cached OpenAI processing failed:', error);
+    console.error('Backend processing failed:', error);
     return textLayers.map(layer => ({ ...layer, issues: [] }));
   }
 }

@@ -10,7 +10,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
   const { 
     selectedIssues, 
     toggleIssueSelection, 
-    updateIssueStatus,
     undoCorrection
   } = usePluginStore();
 

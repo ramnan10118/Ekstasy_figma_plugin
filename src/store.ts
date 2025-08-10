@@ -11,8 +11,6 @@ interface PluginStore extends PluginState {
   setScanMode: (mode: ScanMode) => void;
   setSelectedFrames: (frames: SelectedFrame[]) => void;
   setPreviousRoute: (route: PreviousRoute) => void;
-  addIssuesForLayer: (layerId: string, issues: TextIssue[]) => void;
-  initializeLayersForStreaming: (layers: TextLayer[]) => void;
   toggleIssueSelection: (issueId: string) => void;
   selectAllIssues: () => void;
   clearSelection: () => void;
@@ -53,17 +51,6 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
   
   setProcessingProgress: (processingProgress) => set({ processingProgress }),
   
-  initializeLayersForStreaming: (layers) => set({
-    layers: layers.map(layer => ({ ...layer, issues: [] }))
-  }),
-  
-  addIssuesForLayer: (layerId, issues) => set((state) => ({
-    layers: state.layers.map(layer => 
-      layer.id === layerId 
-        ? { ...layer, issues: [...layer.issues, ...issues] }
-        : layer
-    )
-  })),
   
   toggleIssueSelection: (issueId) => set((state) => ({
     selectedIssues: state.selectedIssues.includes(issueId)
